@@ -44,6 +44,7 @@ func (s *MemoryStore) CreateUser(_ context.Context, user *domain.User) error {
 	return nil
 }
 
+//通过邮箱获得User
 func (s *MemoryStore) GetUserByEmail(_ context.Context, Email string) (*domain.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
