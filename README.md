@@ -1,3 +1,111 @@
-1.cmd/server/main.go  创建服务
-2.internal/domain/domain.go  创建agentversion
-3.
+# Kbot
+
+通过逐步复写代码学习 Go 后端和 Agent 项目。每次实现一个小功能，结合测试理解数据结构、接口边界和运行流程。
+
+当前包含主服务与独立的跨境业务模拟服务。身份认证模块正在实现中，尚未接入注册、登录和 JWT 鉴权。
+
+## 当前进度
+
+- **主服务**：健康检查、环境变量配置与校验、退出信号监听和优雅关闭。
+- **核心数据结构**：用户、工作空间、成员关系、Agent 配置版本和会话。
+- **Runtime 基础**：定义控制面与模型生成接口；根据会话固定的版本解析配置快照。已有测试验证使用会话绑定的版本，尚未接入实际模型调用。
+- **IAM 内存存储**：初始化用户、空间和成员关系容器；创建用户时拒绝重复邮箱；按邮箱查询用户；写入与查询时复制用户结构体。已有测试验证邮箱大小写匹配及修改查询结果不会影响存储。
+- **跨境业务**：订单查询、多仓库存查询、库存调拨、试运行与幂等校验；通过 HTTP 暴露业务能力，包含业务测试和接口测试。
+- **工具契约**：声明订单查询、库存查询和库存调拨工具；检查工具名称及敏感工具的审批描述。审批信息目前仅为声明，尚未实现审批执行流程。
+
+内存中的用户、库存和调拨数据不会跨进程重启保留。工作空间和成员关系目前已定义数据类型与存储容器，存取方法仍待实现。
+
+## 目录结构
+
+```text
+.
+├── cmd/server/                 # 主服务入口
+├── internal/
+│   ├── config/                 # 环境变量读取与配置校验
+│   ├── domain/                 # 核心领域对象
+│   ├── platform/
+│   │   └── iam/                # 身份与访问管理：当前实现内存用户存储
+│   └── runtime/engine/         # 会话绑定版本的快照解析
+└── projects/crossborder/       # 独立 Go 模块
+    ├── cmd/simulator/          # 跨境业务模拟服务入口
+    ├── config/tools.json      # 工具参数与审批描述
+    ├── internal/domain/       # 订单、库存和调拨对象
+    ├── internal/service/      # 内存业务逻辑
+    ├── internal/httpapi/      # HTTP 路由与 JSON 处理
+    ├── contract_test.go        # 工具契约检查
+    └── Makefile                # 构建、测试与启动命令
+```
+
+## 启动主服务
+
+项目的两个 Go 模块均声明使用 Go 1.26.4。
+
+在仓库根目录执行：
+
+```bash
+KBOT_HTTP_ADDR=:8090 \
+KBOT_JWT_SECRET=0123456789abcdef0123456789abcdef \
+go run ./cmd/server
+```
+
+上面的密钥仅用于本地练习。配置项如下：
+
+| 环境变量 | 默认值 | 当前校验 |
+| --- | --- | --- |
+| `KBOT_HTTP_ADDR` | `:8080` | 必须以 `:` 开头；未完整校验端口格式 |
+| `KBOT_JWT_SECRET` | 无 | 至少 32 字节 |
+| `KBOT_JWT_ISSUER` | `kbot-course` | 不能只包含空白字符 |
+
+JWT 配置目前在启动时读取并检查，令牌签发和验证尚未实现。
+
+另开终端检查：
+
+```bash
+curl http://localhost:8090/healthz
+```
+
+预期返回 `ok`。使用 `Ctrl+C` 触发优雅关闭。
+
+## 启动跨境业务服务
+
+在仓库根目录执行：
+
+```bash
+cd projects/crossborder
+make run
+```
+
+默认监听 `:8091`，可通过环境变量 `CROSSBORDER_ADDR` 修改。
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/healthz` | 健康检查 |
+| GET | `/api/orders/{orderID}` | 查询订单 |
+| GET | `/api/inventory?sku=...` | 查询 SKU 多仓库存 |
+| POST | `/api/transfers` | 创建调拨或执行试运行校验 |
+
+查询示例：
+
+```bash
+curl http://localhost:8091/api/orders/TTS-20260801-1001
+curl 'http://localhost:8091/api/inventory?sku=SKU-BLACK-M-01'
+```
+
+调拨的 `idempotency_key` 由调用者提供：相同键与相同参数返回已有结果，相同键与不同参数返回冲突；新的一次业务操作应使用新的键。
+
+## 运行测试
+
+主模块，在仓库根目录执行：
+
+```bash
+go test ./...
+```
+
+跨境业务模块，在仓库根目录执行：
+
+```bash
+cd projects/crossborder
+make test
+```
+
+`make test` 执行 `go test -race -count=1 ./...`。跨境项目有独立的 `go.mod`，主模块的 `go test ./...` 不会自动测试这个嵌套模块。
