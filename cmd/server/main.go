@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"my_kbot/internal/api"
 	"my_kbot/internal/config"
+	"my_kbot/internal/platform/iam"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -19,16 +21,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { //函数签名要求要用到*http.request
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	iamService := iam.New(
+		iam.NewMemoryStore(),
+		cfg.JWTSecret,
+		cfg.JWTIssuer,
+	)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           api.NewRouter(iamService),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
