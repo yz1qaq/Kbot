@@ -58,7 +58,7 @@ func TestHTTPAuthFlow(t *testing.T) {
 		"0123456789abcdef0123456789abcdef",
 		"kbot-test",
 	)
-	router := NewRouter(service)
+	router := NewRouter(service, stubRuntime{})
 
 	send := func(
 		method, path, body string,
@@ -154,5 +154,77 @@ func TestHTTPAuthFlow(t *testing.T) {
 		got["workspace_id"] != workspaces[0].ID ||
 		got["role"] != iam.WorkspaceRoleOwner {
 		t.Fatalf("unexpected context: %+v", got)
+	}
+
+	// 5. 携带身份和空间信息，访问流式聊天路由。
+	streamed := send(
+		http.MethodPost,
+		"/stream/agents/demo/chat",
+		`{"conversation_id":"demo-conversation","message":"你好"}`,
+		map[string]string{
+			"Authorization":  "Bearer " + result.Token,
+			"X-Workspace-ID": workspaces[0].ID,
+		},
+	)
+
+	if streamed.Code != http.StatusOK {
+		t.Fatalf(
+			"stream status = %d, want 200; body = %q",
+			streamed.Code,
+			streamed.Body.String(),
+		)
+	}
+	if got := streamed.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("stream content type = %q", got)
+	}
+
+	want := `data: {"type":"answer_delta","text":"你好"}` + "\n\n"
+	if got := streamed.Body.String(); got != want {
+		t.Fatalf("stream body = %q, want %q", got, want)
+	}
+	if !streamed.Flushed {
+		t.Fatal("expected stream response to be flushed")
+	}
+
+	rejectedCases := []struct {
+		name       string
+		headers    map[string]string
+		wantStatus int
+	}{
+		{
+			name: "missing_token",
+			headers: map[string]string{
+				"X-Workspace-ID": workspaces[0].ID,
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "missing_workspace",
+			headers:    authHeaders,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range rejectedCases {
+		t.Run(tt.name, func(t *testing.T) {
+			response := send(
+				http.MethodPost,
+				"/stream/agents/demo/chat",
+				`{"conversation_id":"demo-conversation","message":"你好"}`,
+				tt.headers,
+			)
+
+			if response.Code != tt.wantStatus {
+				t.Fatalf(
+					"status = %d, want %d; body = %q",
+					response.Code,
+					tt.wantStatus,
+					response.Body.String(),
+				)
+			}
+			if response.Flushed {
+				t.Fatal("rejected request must not enter SSE output")
+			}
+		})
 	}
 }

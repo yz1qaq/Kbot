@@ -16,11 +16,11 @@ import (
 
 // AgentSnapshot 是 Runtime 已解析好的固定配置。
 type AgentSnapshot struct {
-	ID           string //保存的版本id,也就是version-001这种
-	AgentID      string
-	WorkspaceID  string
-	SystemPrompt string
-	MaxSteps     int
+	AgentVersionID string //保存的版本id,也就是version-001这种
+	AgentID        string
+	WorkspaceID    string
+	SystemPrompt   string
+	MaxSteps       int
 }
 
 // platform 定义引擎读取绘画和配置快照所需的能力
@@ -41,6 +41,7 @@ func New(p Platform, model model.BaseChatModel) *Engine {
 	}
 }
 
+// 获取对应conversationID的agent快照
 func (e *Engine) ResolveSnapshot(ctx context.Context, conversationID string) (*AgentSnapshot, error) {
 	if e.platform == nil {
 		return nil, fmt.Errorf("platform is required")
@@ -57,8 +58,8 @@ func (e *Engine) ResolveSnapshot(ctx context.Context, conversationID string) (*A
 	if err != nil {
 		return nil, fmt.Errorf("get agent snapshot:%w", err)
 	}
-	if snapshot.ID != conversation.AgentVersionID {
-		return nil, fmt.Errorf("snapshot version mismatch:want %s,got %s", conversation.AgentVersionID, snapshot.ID)
+	if snapshot.AgentVersionID != conversation.AgentVersionID {
+		return nil, fmt.Errorf("snapshot version mismatch:want %s,got %s", conversation.AgentVersionID, snapshot.AgentVersionID)
 	}
 	return snapshot, nil
 }

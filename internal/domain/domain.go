@@ -58,3 +58,12 @@ type Conversation struct {
 	UserID         string //是哪个用户创建的会话
 	CreatedAt      time.Time
 }
+
+// Message 表示会话中的一条消息记录。
+type Message struct {
+	ID             string //这条消息的唯一标识	message-001
+	ConversationID string //属于哪次会话	demo-conversation
+	Role           string //user assistant
+	Content        string
+	CreatedAt      time.Time
+}

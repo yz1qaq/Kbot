@@ -6,7 +6,10 @@ import (
 	"log"
 	"my_kbot/internal/api"
 	"my_kbot/internal/config"
+	"my_kbot/internal/domain"
+	"my_kbot/internal/platform"
 	"my_kbot/internal/platform/iam"
+	"my_kbot/internal/runtime/engine"
 	"my_kbot/internal/runtime/llm"
 	"net/http"
 	"os/signal"
@@ -27,13 +30,32 @@ func main() {
 		cfg.JWTSecret,
 		cfg.JWTIssuer,
 	)
-	if _, err := llm.NewGateway(cfg); err != nil {
+
+	gateway, err := llm.NewGateway(cfg)
+	if err != nil {
 		log.Fatalf("create LLM gatway : %v", err)
 	}
 
+	controlPlane := platform.New()
+
+	controlPlane.PutSnapshot(&engine.AgentSnapshot{
+		AgentVersionID: "demo-v1",
+		AgentID:        "demo",
+		SystemPrompt:   "你是kbot课堂助手",
+		MaxSteps:       4,
+	})
+
+	controlPlane.PutConversation(&domain.Conversation{
+		ID:             "demo-conversation",
+		AgentID:        "demo",
+		AgentVersionID: "demo-v1",
+	})
+
+	runtime := engine.New(controlPlane, gateway)
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(iamService),
+		Handler:           api.NewRouter(iamService, runtime),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

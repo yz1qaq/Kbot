@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(iamService *iam.Service) http.Handler {
+func NewRouter(iamService *iam.Service, runtimes ...ChatRuntime) http.Handler {
 	router := chi.NewRouter()
 	//注册通用中间件
 	router.Use(middleware.Recoverer, middleware.RequestID)
@@ -74,6 +74,14 @@ func NewRouter(iamService *iam.Service) http.Handler {
 				})
 			},
 		)
+
+		if len(runtimes) > 0 && runtimes[0] != nil {
+			protected.With(middleware.Workspace(iamService)).Post(
+				"/stream/agents/{agentsID}/chat",
+				NewstreamHandler(runtimes[0]).ServeHTTP,
+			)
+
+		}
 	})
 
 	return router

@@ -2,34 +2,35 @@
 
 通过逐步复写代码学习 Go 后端和 Agent 项目。每次实现一个小功能，结合测试理解数据结构、接口边界和运行流程。
 
-已完成参考仓库 `04-end` 第一至第四章的核心后端学习与复写，以及 `05-end` 第五章的模型接入核心实现，按约定暂不包含 `web`。当前包含跨境业务模拟器、HTTP Tool 契约、注册登录与工作空间访问边界，以及基于 Eino 标准 ChatModel 接口的模型 Gateway。
+已完成参考仓库第一至第六章的核心后端学习与复写，当前进度对应 `06-end`，按约定暂不包含 `web`。当前包含跨境业务模拟器、HTTP Tool 契约、注册登录与空间访问边界、Eino 模型 Gateway，以及基于固定会话配置的 SSE 流式聊天。真实模型及 HTTP 流式聊天的在线验收结果尚待确认。
 
 ## 项目来源
 
 本项目基于原仓库 [Q1mi/kbot](https://github.com/Q1mi/kbot) 进行学习与逐步复写。项目设计与课程参考代码来源于该仓库。
 
-当前学习参考原仓库的 [`05-end` 标签下的 `kbot-course`](https://github.com/Q1mi/kbot/tree/05-end/kbot-course)，第一至第四章的基线为 [`04-end`](https://github.com/Q1mi/kbot/tree/04-end/kbot-course)，暂不包含 `web` 部分。本仓库记录个人复写代码、学习注释和实际验证进度。第五章参考实现使用豆包，本项目将默认模型服务配置调整为 DeepSeek。
+当前学习参考原仓库的 [`06-end` 标签下的 `kbot-course`](https://github.com/Q1mi/kbot/tree/06-end/kbot-course)，此前阶段分别对应 [`04-end`](https://github.com/Q1mi/kbot/tree/04-end/kbot-course) 和 [`05-end`](https://github.com/Q1mi/kbot/tree/05-end/kbot-course)，暂不包含 `web` 部分。本项目是独立的个人学习仓库，参考标签仅标识课程进度，不要求使用原教程的练习分支。模型接入的参考实现使用豆包，本项目将默认服务配置调整为 DeepSeek。
 
-**阶段状态：第一至第四章核心后端功能已完成；第五章模型接入核心代码已完成，真实服务调用验收待确认。** 第四章已核对参考版本的 14 个非测试 Go 源文件，并通过主模块和跨境独立模块的静态检查与竞态测试。第五章主模块已通过 `go vet ./...`、`go test -race -count=1 ./...`，带 integration 标签的测试也已通过仅编译检查；以上检查均未请求真实模型。保留个人命名和已注明的行为调整，不要求源码逐字一致。Agent 主循环尚未实现。
+**阶段状态：第一至第六章核心后端代码已完成；真实模型和 SSE 聊天在线验收待确认。** 第四章曾核对参考版本的 14 个非测试 Go 源文件，并通过两个模块的静态检查与竞态测试。本次第六章阶段检查已通过主模块的 `go vet ./...` 和 `go test -race -count=1 ./...`；模型集成测试此前通过仅编译检查，本次未运行真实模型请求。保留个人命名和行为调整，不要求源码逐字一致：例如 `AgentSnapshot.ID` 在本项目命名为 `AgentVersionID`；参考版本中未被调用的 `answerDeltas` 辅助函数未复写，当前直接消费模型响应流。工具调用与 Agent 主循环尚未实现。
 
 ## 当前进度
 
 - **主服务**：健康检查、环境变量配置与校验、退出信号监听和优雅关闭；启动时创建共享的 IAM 内存存储和服务，使用 Chi 路由器组装 HTTP 接口及中间件。
-- **核心数据结构**：用户、工作空间、成员关系、Agent 配置版本和会话。
-- **Runtime 基础**：通过控制面接口读取会话绑定的配置版本，已有测试验证固定版本的快照解析。Engine 的模型依赖已改为 Eino 的 `model.BaseChatModel`，尚未实现调用模型的执行方法。
-- **模型 Gateway**：使用 Eino v0.9.15 和 OpenAI 兼容适配器 v0.1.13，封装 `Generate` 与 `Stream`。已有本地模拟 HTTP 测试验证 `Generate` 的请求路径及回复解析；真实模型测试使用 `integration` 构建标签手动开启，实际调用成功与否待确认。`Stream` 尚未进行流式行为测试。
-- **模型启动检查**：主服务读取并校验模型配置，调用 `NewGateway` 检查客户端能否创建。当前入口未保存该实例、未传入 Engine，也未开放聊天 HTTP 接口；创建客户端本身不会验证真实 Key 或发出模型请求。
+- **核心数据结构**：用户、工作空间、成员关系、Agent 配置版本、会话及消息记录类型。`domain.Message` 目前仅定义结构，尚未接入消息存储。
+- **内存控制面**：保存、查询会话与配置快照，通过 RWMutex 保护共享 map，并在保存和查询时复制结构体。已有测试验证会话副本隔离，以及真实 Platform 与 Engine 配合解析会话固定的版本。
+- **Runtime 流式聊天**：Engine 依赖 Eino 的 `model.BaseChatModel`，使用会话绑定的快照组装系统提示词和本次用户消息，调用 `Stream`、逐段读取并拼接回答，通过 Emitter 输出 `run_started`、`answer_delta`、`answer_done`、`run_finished` 事件。已有假模型测试验证事件顺序、片段文本和完整回答；取消测试验证发送前已取消时不执行回调。
+- **模型 Gateway**：使用 Eino v0.9.15 和 OpenAI 兼容适配器 v0.1.13，封装 `Generate` 与 `Stream`。本地模拟 HTTP 测试验证 `Generate` 的请求路径及回复解析；Engine 流式行为使用假模型验证，Gateway 的真实 HTTP 流协议尚未确认。真实模型集成测试使用 `integration` 标签手动开启，实际调用成功与否待确认。
+- **启动装配**：主服务保存 Gateway，创建内存控制面，放入 `demo-v1` 配置和 `demo-conversation` 会话，将控制面和 Gateway 注入 Engine，再交给路由器。创建客户端本身不会验证真实 Key 或发出模型请求；聊天请求进入 Engine 后才调用模型。
 - **IAM 用户存储**：创建用户时拒绝重复邮箱；支持按邮箱和用户 ID 查询；写入与查询时复制用户结构体。已有测试验证邮箱大小写匹配及修改查询结果不会影响存储。
 - **工作空间与成员关系**：创建工作空间、添加及查询成员关系、判断成员关系是否存在、列出用户已加入的空间。重复加入同一空间会返回错误并保留原角色；这一行为与参考实现允许覆盖成员关系的规则不同。已有测试验证重复加入不会覆盖角色，以及空间列表的筛选和副本隔离。
 - **IAM 服务层**：通过 Store 接口调用存储层；注册时整理邮箱与姓名、校验输入、使用 bcrypt 保存密码哈希，并创建默认工作空间及 owner 成员关系。提供用户空间列表、角色查询和访问资格检查。已有测试验证 owner 通过、非法角色 root 被拒绝，以及注册成功后的用户保存、密码哈希验证、默认空间和 owner 关系。
 - **登录与 JWT**：通过 bcrypt 验证密码，邮箱不存在和密码错误统一返回凭据错误；登录成功后使用 HS256 签发包含用户 ID、签发者和八小时有效期的 JWT。解析时限制算法、验证签名和签发者、检查存在的过期时间，并要求用户 ID 非空。已有测试覆盖正确密码、错误密码、不存在的邮箱、登录令牌解析得到原用户 ID、密钥不匹配及过期令牌拒绝。
 - **HTTP 通用中间件**：通过 Chain 按传入顺序组合中间件；RequestID 复用请求 ID 或生成 16 位十六进制 ID，并传递到响应头和请求上下文；Recoverer 捕获同一 goroutine 中下游传播的 panic、记录堆栈并尝试返回 500。已有测试验证中间件进入与返回顺序、请求 ID 的生成与复用、上下文和响应头的一致性，以及尚未写出响应时的 panic 恢复与 500 响应。
 - **HTTP 认证与空间权限**：Auth 验证请求令牌并传递用户 ID；Workspace 查询服务端成员角色，按角色、HTTP 方法和路径检查权限，并传递空间 ID 和角色。已有测试覆盖有效令牌放行、缺少或无效令牌拒绝、角色路径规则、身份与空间信息传递、缺少空间选择、没有成员关系、空 IAM 服务，以及 viewer 可读但不能修改配置。拒绝访问的链路测试同时检查业务处理器没有执行。
-- **主服务 HTTP 接口**：健康检查、用户注册、用户登录、当前用户的空间列表和鉴权上下文；空间列表经过 Auth，context 额外经过 Workspace。已有路由测试验证有效 Token 缺少空间选择时返回 400，以及通过 HTTP 注册、登录、查询空间和访问 context 后，用户 ID、空间 ID 和 owner 角色一致。
+- **主服务 HTTP 接口**：健康检查、注册登录、用户空间列表、鉴权上下文和 SSE 聊天。聊天路由经过 Auth 与 Workspace；处理器将事件编码为 JSON，按 SSE 帧格式写入响应并 Flush。已有测试验证帧正文、响应头、刷新操作、错误事件去重，以及注册登录后访问聊天的完整路由流程；缺少 Token 返回 401，缺少空间选择返回 400。路由测试使用假 Runtime，不调用真实模型。
 - **跨境业务**：订单查询、多仓库存查询、库存调拨、试运行与幂等校验；通过 HTTP 暴露业务能力，包含业务测试和接口测试。
 - **工具契约**：声明订单查询、库存查询和库存调拨工具；检查工具名称及敏感工具的审批描述。审批信息目前仅为声明，尚未实现审批执行流程。
 
-内存中的用户、工作空间、成员关系、库存和调拨数据不会跨进程重启保留。注册的多次写入尚无事务回滚。角色合法性、访问资格和基于方法与路径的课程权限规则已接入主服务路由，并通过 httptest 直接调用路由器验证；当前完成的是课程的 Agent 地基阶段。
+内存中的用户、工作空间、成员关系、会话、配置快照、库存和调拨数据不会跨进程重启保留。注册的多次写入尚无事务回滚。当前聊天仅发送系统提示词和本次输入，没有保存或加载历史消息；MaxSteps 尚未参与执行控制。Workspace 中间件验证用户对所选空间的访问资格，尚未验证演示会话属于该空间或该用户；路径中的 Agent 参数也尚未参与配置选择。这是当前课程阶段的实现边界。
 
 ## 目录结构
 
@@ -39,14 +40,18 @@
 ├── internal/
 │   ├── api/
 │   │   ├── router.go           # Chi 路由、注册登录、空间列表与鉴权上下文
-│   │   ├── router_test.go      # 路由边界与完整 HTTP 流程测试
+│   │   ├── router_test.go      # 路由边界与包含聊天的 HTTP 流程测试
+│   │   ├── sse.go              # SSE 事件输出和错误处理
+│   │   ├── sse_test.go         # 帧格式、刷新与错误去重测试
 │   │   └── middleware/         # 请求 ID、panic 恢复、认证与空间权限
 │   ├── config/                 # 环境变量读取与配置校验
 │   ├── domain/                 # 核心领域对象
 │   ├── platform/
+│   │   ├── platform.go         # 会话和快照的内存控制面
+│   │   ├── platform_test.go    # 副本隔离与 Engine 联动测试
 │   │   └── iam/                # 内存存储、注册登录、JWT 与空间访问检查
 │   └── runtime/
-│       ├── engine/            # 会话绑定版本的快照解析，依赖标准 ChatModel 接口
+│       ├── engine/            # 固定配置解析、模型流读取与事件输出
 │       └── llm/               # 模型 Gateway、本地 HTTP 测试与手动集成测试
 └── projects/crossborder/       # 独立 Go 模块
     ├── cmd/simulator/          # 跨境业务模拟服务入口
@@ -83,7 +88,7 @@ go run ./cmd/server
 | `KBOT_LLM_API_KEY` / `ARK_API_KEY` / `DEEPSEEK_API_KEY` | 无 | 按列出顺序选择第一个去除两端空白后非空的值 |
 | `KBOT_LLM_TIMEOUT_SECONDS` | `30` | 读取正整数秒数；空值、无效整数和非正数回退为 30 秒 |
 
-主服务入口读取并校验服务、JWT 和模型配置，创建 IAM 服务及模型客户端，再组装 HTTP 服务。模型配置校验仅检查必需值和超时，不验证真实凭据、模型可用性或服务连通性。即使默认地址是 DeepSeek，`ARK_API_KEY` 仍优先于 `DEEPSEEK_API_KEY`；使用真实 DeepSeek Key 时可显式设置 `KBOT_LLM_API_KEY`。
+主服务入口读取并校验服务、JWT 和模型配置，创建 IAM 服务、模型客户端和演示控制面，装配 Engine，再将其传给路由器以注册流式聊天接口。模型配置校验仅检查必需值和超时，不验证真实凭据、模型可用性或服务连通性。即使默认地址是 DeepSeek，`ARK_API_KEY` 仍优先于 `DEEPSEEK_API_KEY`；使用真实 DeepSeek Key 时可显式设置 `KBOT_LLM_API_KEY`。
 
 另开终端检查：
 
@@ -102,10 +107,29 @@ curl http://localhost:8090/healthz
 | POST | `/api/v1/auth/login` | JSON 正文包含 email、password；成功返回 token 和 user |
 | GET | `/api/v1/workspaces` | `Authorization: Bearer <token>` |
 | GET | `/api/v1/context` | Bearer Token 和 `X-Workspace-ID`，且具有该空间的访问资格 |
+| POST | `/stream/agents/{agentsID}/chat` | Bearer Token、`X-Workspace-ID`，正文包含 conversation_id 和 message；角色须允许聊天 |
 
 手动验证顺序为注册、登录、携带 Token 查询空间列表、再携带 Token 和空间 ID 查询 context。注册成功返回 201，登录、空间列表和 context 成功返回 200。受保护接口缺少或携带无效 Token 返回 401；context 在 Token 有效但缺少空间选择时返回 400，访问没有成员关系的空间时返回 403。
 
 注册时自动创建默认空间及 owner 成员关系。context 返回 `user_id`、`workspace_id` 和服务端解析的 `role`；客户端选择空间，但不能自行声明角色。
+
+## 手动验证流式聊天
+
+配置真实 DeepSeek Key 后启动主服务，并在同一个服务进程中注册、登录、查询工作空间。重启会清空内存用户与空间，需要重新注册。将下面示例中的 Token 和空间 ID 替换为登录与空间查询得到的值。
+
+此请求会调用真实模型并产生 API 用量；本地启动示例的 `test-key` 不能用于此步骤。
+
+```bash
+curl -N -i http://localhost:8090/stream/agents/demo/chat \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <登录Token>' \
+  -H 'X-Workspace-ID: <工作空间ID>' \
+  -d '{"conversation_id":"demo-conversation","message":"请用一句话介绍你自己。"}'
+```
+
+`-N` 关闭 curl 输出缓冲。预期依次收到 `run_started`、若干 `answer_delta`、包含完整回答的 `answer_done`，以及状态为 completed 的 `run_finished`。HTTP 200 只表示 SSE 响应已经开始，不证明模型调用成功；运行失败通过流中的 `error` 事件报告。`answer_done` 是完整结果，不应再次追加到此前已显示的片段后面。
+
+当前只记录本地模拟测试通过，真实服务端到端输出尚未确认。
 
 ## 启动跨境业务服务
 

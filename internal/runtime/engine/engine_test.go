@@ -37,14 +37,14 @@ func TestResolveSnapshotUsesConversationPinnedVersion(t *testing.T) {
 		},
 		snapshots: map[string]*AgentSnapshot{
 			"version-001": {
-				ID:           "version-001",
-				AgentID:      "agent-001",
-				SystemPrompt: "这是第一版提示词:xxxx",
+				AgentVersionID: "version-001",
+				AgentID:        "agent-001",
+				SystemPrompt:   "这是第一版提示词:xxxx",
 			},
 			"version-002": {
-				ID:           "version-002",
-				AgentID:      "agent-001",
-				SystemPrompt: "这是第二版提示词:xxxx",
+				AgentVersionID: "version-002",
+				AgentID:        "agent-001",
+				SystemPrompt:   "这是第二版提示词:xxxx",
 			},
 		},
 	}
@@ -53,8 +53,8 @@ func TestResolveSnapshotUsesConversationPinnedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve snapshot: %v", err)
 	}
-	if snapshot.ID != "version-001" {
-		t.Fatalf("snapshot ID = %q, want version-001", snapshot.ID)
+	if snapshot.AgentVersionID != "version-001" {
+		t.Fatalf("snapshot ID = %q, want version-001", snapshot.AgentVersionID)
 	}
 	if controlPlane.requestedVersion != "version-001" {
 		t.Fatalf(
