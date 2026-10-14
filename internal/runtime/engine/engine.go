@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"my_kbot/internal/domain"
 
-	"github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/eino/components/model"
 )
 
 // AgentSnapshot 是 Runtime 已解析好的固定配置。
@@ -29,41 +29,36 @@ type Platform interface {
 	GetAgentSnapshotByVersion(ctx context.Context, agentVersionID string) (*AgentSnapshot, error)
 }
 
-// 定义引擎调用模型所需能力
-type Generator interface {
-	Generate(ctx context.Context, messages []*schema.Message, tools []*schema.ToolInfo) (*schema.Message, error)
-}
-
 type Engine struct {
 	platform Platform
-	gen      Generator
+	model    model.BaseChatModel
 }
 
-func New(p Platform, g Generator) *Engine {
+func New(p Platform, model model.BaseChatModel) *Engine {
 	return &Engine{
 		platform: p,
-		gen:      g,
+		model:    model,
 	}
 }
 
-func (e *Engine) ResolveSnapshot(ctx context.Context,conversationID string)(*AgentSnapshot,error){
-	if e.platform==nil{
-		return nil,fmt.Errorf("platform is required")
+func (e *Engine) ResolveSnapshot(ctx context.Context, conversationID string) (*AgentSnapshot, error) {
+	if e.platform == nil {
+		return nil, fmt.Errorf("platform is required")
 	}
-	conversation,err:=e.platform.LoadConversation(ctx,conversationID)
-	if err!=nil{
-		return nil,fmt.Errorf("load conversation :%w",err)
+	conversation, err := e.platform.LoadConversation(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("load conversation :%w", err)
 	}
-	if conversation.AgentVersionID == ""{
-		return nil,fmt.Errorf("conversation has no pinned agent version")
+	if conversation.AgentVersionID == "" {
+		return nil, fmt.Errorf("conversation has no pinned agent version")
 	}
 
-	snapshot,err:=e.platform.GetAgentSnapshotByVersion(ctx,conversation.AgentVersionID)
-	if err!=nil{
-		return nil,fmt.Errorf("get agent snapshot:%w",err)
+	snapshot, err := e.platform.GetAgentSnapshotByVersion(ctx, conversation.AgentVersionID)
+	if err != nil {
+		return nil, fmt.Errorf("get agent snapshot:%w", err)
 	}
-	if snapshot.ID != conversation.AgentVersionID{
-		return  nil,fmt.Errorf("snapshot version mismatch:want %s,got %s",conversation.AgentVersionID,snapshot.ID)
+	if snapshot.ID != conversation.AgentVersionID {
+		return nil, fmt.Errorf("snapshot version mismatch:want %s,got %s", conversation.AgentVersionID, snapshot.ID)
 	}
-	return snapshot,nil
+	return snapshot, nil
 }

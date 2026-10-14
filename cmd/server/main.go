@@ -7,6 +7,7 @@ import (
 	"my_kbot/internal/api"
 	"my_kbot/internal/config"
 	"my_kbot/internal/platform/iam"
+	"my_kbot/internal/runtime/llm"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -26,6 +27,9 @@ func main() {
 		cfg.JWTSecret,
 		cfg.JWTIssuer,
 	)
+	if _, err := llm.NewGateway(cfg); err != nil {
+		log.Fatalf("create LLM gatway : %v", err)
+	}
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
