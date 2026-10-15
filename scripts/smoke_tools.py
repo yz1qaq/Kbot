@@ -96,7 +96,7 @@ def main():
             "required": ["sku"],
         }),
         "endpoint_config": json.dumps({"url": "https://example.com/api/inventory"}),
-        "auth_config": json.dumps({"Authorization": "Bearer demo-key"}),
+        "auth_config": json.dumps({"headers": {"Authorization": "Bearer demo-key"}}),
         "sensitive": False,
     }, token=token, workspace_id=workspace_id)
     if status == 200 and body == "":

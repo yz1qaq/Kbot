@@ -2,15 +2,15 @@
 
 通过逐步复写代码学习 Go 后端和 Agent 项目。每次实现一个小功能，结合测试理解数据结构、接口边界和运行流程。
 
-已完成参考仓库第一至第七章的核心后端学习与复写，当前进度对应 `07-end`，按约定暂不包含 `web`。当前包含跨境业务模拟器、HTTP Tool 契约、注册登录与空间访问边界、Eino 模型 Gateway、基于固定会话配置的 SSE 流式聊天，以及工具版本注册表和工具管理 HTTP 接口。真实模型及 HTTP 流式聊天的在线验收结果尚待确认。
+已完成参考仓库第一至第八章的核心后端学习与复写，当前进度对应 `08-end`，按约定暂不包含 `web`。当前包含跨境业务模拟器、IAM 与空间访问边界、Eino 模型 Gateway、固定会话配置的 SSE 流式聊天、工具版本注册与管理、HTTP/代码工具执行器，以及 Docker 沙箱和独立沙箱 HTTP 服务。学习者已手动验证本机沙箱执行 Python，以及将沙箱服务打包为镜像后运行并执行 Python；真实模型及 HTTP 流式聊天的在线验收结果尚待确认。
 
 ## 项目来源
 
 本项目基于原仓库 [Q1mi/kbot](https://github.com/Q1mi/kbot) 进行学习与逐步复写。项目设计与课程参考代码来源于该仓库。
 
-当前学习参考原仓库的 [`07-end` 标签下的 `kbot-course`](https://github.com/Q1mi/kbot/tree/07-end/kbot-course)，此前聊天阶段对应 [`06-end`](https://github.com/Q1mi/kbot/tree/06-end/kbot-course)，更早阶段分别对应 [`04-end`](https://github.com/Q1mi/kbot/tree/04-end/kbot-course) 和 [`05-end`](https://github.com/Q1mi/kbot/tree/05-end/kbot-course)，暂不包含 `web` 部分。本项目是独立的个人学习仓库，参考标签仅标识课程进度，不要求使用原教程的练习分支。模型接入的参考实现使用豆包，本项目将默认服务配置调整为 DeepSeek。
+当前学习参考原仓库的 [`08-end` 标签下的 `kbot-course`](https://github.com/Q1mi/kbot/tree/08-end/kbot-course)，此前工具注册阶段对应 [`07-end`](https://github.com/Q1mi/kbot/tree/07-end/kbot-course)，聊天阶段对应 [`06-end`](https://github.com/Q1mi/kbot/tree/06-end/kbot-course)，更早阶段分别对应 [`04-end`](https://github.com/Q1mi/kbot/tree/04-end/kbot-course) 和 [`05-end`](https://github.com/Q1mi/kbot/tree/05-end/kbot-course)，暂不包含 `web` 部分。本项目是独立的个人学习仓库，参考标签仅标识课程进度，不要求使用原教程的练习分支。模型接入的参考实现使用豆包，本项目将默认服务配置调整为 DeepSeek。
 
-**阶段状态：第一至第七章核心后端代码已完成；真实模型和 SSE 聊天在线验收待确认。** 第四章曾核对参考版本的 14 个非测试 Go 源文件，并通过两个模块的静态检查与竞态测试。本次第七章阶段检查已通过主模块的 `go vet ./...`、`go test -race -count=1 ./...` 和 `git diff --check`；模型集成测试此前通过仅编译检查，本次未运行真实模型请求。保留个人命名和行为调整，不要求源码逐字一致：例如 `AgentSnapshot.ID` 在本项目命名为 `AgentVersionID`；参考版本中未被调用的 `answerDeltas` 辅助函数未复写，当前直接消费模型响应流。工具调用与 Agent 主循环尚未实现。
+**阶段状态：第一至第八章核心后端代码已完成；执行器与独立沙箱已实现，尚未接入聊天的 Agent 工具调用循环。** 本次第八章阶段检查已通过主模块和跨境业务模块的 `go vet ./...`、`go test -race -count=1 ./...`。HTTP 客户端与沙箱处理器的通信通过本机临时服务测试验证，Docker 真实执行及服务镜像运行由学习者手动验证成功；未调用真实模型 API。保留个人命名和行为调整，例如 `AgentSnapshot.ID` 在本项目命名为 `AgentVersionID`；参考版本的 Go 1.26.6 构建镜像在本项目使用与模块一致的 Go 1.26.4。真实模型及 SSE 聊天在线验收仍待确认。
 
 ## 当前进度
 
@@ -29,17 +29,24 @@
 - **主服务 HTTP 接口**：健康检查、注册登录、用户空间列表、鉴权上下文和 SSE 聊天。聊天路由经过 Auth 与 Workspace；处理器将事件编码为 JSON，按 SSE 帧格式写入响应并 Flush。已有测试验证帧正文、响应头、刷新操作、错误事件去重，以及注册登录后访问聊天的完整路由流程；缺少 Token 返回 401，缺少空间选择返回 400。路由测试使用假 Runtime，不调用真实模型。
 - **工具版本注册表**：按全局版本 ID 保存定义，重复 ID 拒绝注册；同一空间内，去除首尾空白并转换为小写后的名称只允许归属同一个 ToolID，同一工具可以有多个版本。Register 保存草稿或已发布版本；Resolve 检查空间和发布状态，再还原认证配置；List 返回该空间的所有版本，包括草稿，按 ID 字典序排序，并清除返回副本的凭据。使用 AES-GCM 加密内部保存的认证配置，对 InputSchema 做字节复制。已有测试验证加密还原、篡改拒绝、名称归属、跨空间和草稿读取拒绝、列表凭据处理、输入切片隔离及重复 ID 拒绝。
 - **工具管理 HTTP**：`GET /api/v1/tools` 与 `POST /api/v1/tools` 经过 Auth、Workspace 中间件。创建接口从 context 取得工作空间，服务端生成版本 ID，设置 ToolID 等于该 ID，并直接发布。已有 HTTP 测试验证创建返回 201 和版本 ID、列表能查询到该版本、HasAuth 标记正确，以及响应不包含测试凭据。
+- **工具执行器**：通过 Registry 接口解析已发布版本，要求参数为单个 JSON 对象，并使用 gojsonschema 校验输入。HTTP 工具以 POST 发送 JSON，按白名单约束端点和连接，限制重定向及响应读取大小，支持认证请求头和 Idempotency-Key；`code_execution` 工具通过 SandboxRunner 接口执行。已有测试覆盖 HTTP 请求内容、无效参数在发送前拒绝、跨源重定向阻断，以及代码工具路由到假执行器。
+- **Docker 沙箱**：每次执行创建一次性容器，默认禁用网络、根文件系统只读、使用非 root 用户，限制内存、CPU、进程数、代码长度、输出保存量和并发数。捕获标准输出、标准错误、退出码和耗时；取消或超时后尝试按容器名称清理。已有测试覆盖输出截断及并发容量已满时拒绝任务。本机真实 Python 执行已由学习者验证。
+- **独立沙箱服务与客户端**：`cmd/sandbox-runner` 启动时检查环境、清理带指定标签的容器、准备固定 digest 镜像，再提供健康、就绪和代码执行接口。执行接口校验共享 Bearer Token；Client 封装 HTTP 请求，提供 Execute、Run 和 Check。测试覆盖缺少 token 时不调用后端、正确 token 下的参数与结果传递，以及客户端经过真实本地 HTTP 连接调用处理器；这些自动化测试使用假执行后端。提供多阶段构建 Dockerfile，学习者已验证服务容器通过 Docker socket 创建代码执行容器。
 - **联调脚本**：`scripts/smoke_tools.py` 使用 Python 标准库，串联注册、登录、取得 Token、查询工作空间、创建工具和查询工具。重复执行复用测试账号，每次使用新的工具名称；Token 自动携带且不打印。已在临时 HTTP 测试服务上连续执行两次通过，不调用模型或实际工具端点。
 - **跨境业务**：订单查询、多仓库存查询、库存调拨、试运行与幂等校验；通过 HTTP 暴露业务能力，包含业务测试和接口测试。
 - **工具契约**：声明订单查询、库存查询和库存调拨工具；检查工具名称及敏感工具的审批描述。审批信息目前仅为声明，尚未实现审批执行流程。
 
-内存中的用户、工作空间、成员关系、会话、配置快照、工具版本、库存和调拨数据不会跨进程重启保留。工具管理目前保存定义和认证配置，尚未执行工具端点或接入 Agent 工具调用循环；POST 每次创建新工具及其首个版本，尚无为已有 ToolID 添加新版本的 HTTP 入口。注册的多次写入尚无事务回滚。当前聊天仅发送系统提示词和本次输入，没有保存或加载历史消息；MaxSteps 尚未参与执行控制。Workspace 中间件验证用户对所选空间的访问资格，尚未验证演示会话属于该空间或该用户；路径中的 Agent 参数也尚未参与配置选择。这是当前课程阶段的实现边界。
+内存中的用户、工作空间、成员关系、会话、配置快照、工具版本、库存和调拨数据不会跨进程重启保留。工具管理接口保存定义和认证配置；工具执行器已能独立调用 HTTP 端点或代码沙箱，但 `cmd/server` 尚未组装工具执行器与沙箱客户端，聊天 Engine 尚未接入 Agent 工具调用循环。POST 每次创建新工具及其首个版本，尚无为已有 ToolID 添加新版本的 HTTP 入口。注册的多次写入尚无事务回滚。当前聊天仅发送系统提示词和本次输入，没有保存或加载历史消息；MaxSteps 尚未参与执行控制。Workspace 中间件验证用户对所选空间的访问资格，尚未验证演示会话属于该空间或该用户；路径中的 Agent 参数也尚未参与配置选择。这是当前课程阶段的实现边界。
 
 ## 目录结构
 
 ```text
 .
-├── cmd/server/                 # 主服务入口
+├── cmd/
+│   ├── server/                # 主服务入口
+│   └── sandbox-runner/        # 独立沙箱服务入口
+├── deploy/Dockerfile.sandbox-runner # 沙箱服务多阶段构建
+├── Makefile                   # 主服务、沙箱和跨境模块的构建与运行命令
 ├── internal/
 │   ├── api/
 │   │   ├── router.go           # Chi 路由、IAM、工具管理与聊天接口
@@ -56,7 +63,9 @@
 │   │   └── tool/               # 工具版本注册表、凭据加密与测试
 │   └── runtime/
 │       ├── engine/            # 固定配置解析、模型流读取与事件输出
-│       └── llm/               # 模型 Gateway、本地 HTTP 测试与手动集成测试
+│       ├── llm/               # 模型 Gateway、本地 HTTP 测试与手动集成测试
+│       ├── tooling/           # HTTP/代码工具执行器、参数校验与测试
+│       └── sandbox/           # Docker 执行、HTTP 服务与客户端、测试
 ├── scripts/smoke_tools.py      # 注册、登录、空间与工具管理一键联调
 └── projects/crossborder/       # 独立 Go 模块
     ├── cmd/simulator/          # 跨境业务模拟服务入口
@@ -92,6 +101,8 @@ go run ./cmd/server
 | `KBOT_LLM_MODEL` | `deepseek-flash` | 不能只包含空白字符 |
 | `KBOT_LLM_API_KEY` / `ARK_API_KEY` / `DEEPSEEK_API_KEY` | 无 | 按列出顺序选择第一个去除两端空白后非空的值 |
 | `KBOT_LLM_TIMEOUT_SECONDS` | `30` | 读取正整数秒数；空值、无效整数和非正数回退为 30 秒 |
+| `KBOT_SANDBOX_RUNNER_URL` | `http://127.0.0.1:8081` | 目前仅加载，主服务入口尚未使用 |
+| `KBOT_SANDBOX_RUNNER_TOKEN` | 无 | 目前仅加载；创建沙箱 Client 时要求非空 |
 
 主服务入口读取并校验服务、JWT 和模型配置，创建 IAM 服务、模型客户端和演示控制面，装配 Engine，再创建工具注册表，一同交给路由器以注册聊天和工具管理接口。模型配置校验仅检查必需值和超时，不验证真实凭据、模型可用性或服务连通性。即使默认地址是 DeepSeek，`ARK_API_KEY` 仍优先于 `DEEPSEEK_API_KEY`；使用真实 DeepSeek Key 时可显式设置 `KBOT_LLM_API_KEY`。
 
@@ -102,6 +113,82 @@ curl http://localhost:8090/healthz
 ```
 
 预期返回 `ok`，响应头包含 `X-Request-ID`。使用 `Ctrl+C` 触发优雅关闭。
+
+## 启动独立沙箱服务
+
+这一服务独立运行，不需要业务服务的 JWT 或模型 Key。先启动本机 Docker，再执行：
+
+```bash
+KBOT_SANDBOX_RUNNER_ADDR=127.0.0.1:8081 \
+KBOT_SANDBOX_RUNNER_TOKEN=local-sandbox-demo-token-0123456789abcdef \
+go run ./cmd/sandbox-runner
+```
+
+示例 token 仅用于本地练习；入口要求其长度至少 32 字节。服务启动时调用 Prepare：清理标签为 `kbot.course.sandbox=true` 的容器、拉取配置的固定 digest 镜像，再检查环境。准备阶段总超时为 5 分钟，首次启动可能需要下载镜像。清理按标签匹配，包含仍在运行的匹配容器，因此同一 Docker daemon 上不要用该标签同时启动多个 Runner。
+
+| 环境变量 | 默认值 |
+| --- | --- |
+| `KBOT_SANDBOX_RUNNER_ADDR` | `:8081` |
+| `KBOT_SANDBOX_RUNNER_TOKEN` | 无，入口要求至少 32 字节 |
+| `KBOT_SANDBOX_MEMORY_MB` | `256` |
+| `KBOT_SANDBOX_CPUS` | `0.5` |
+| `KBOT_SANDBOX_PIDS_LIMIT` | `64` |
+| `KBOT_SANDBOX_TMPFS_MB` | `64` |
+| `KBOT_SANDBOX_MAX_CODE_BYTES` | `65536` |
+| `KBOT_SANDBOX_MAX_OUTPUT_BYTES` | `1048576`，stdout 和 stderr 分别限制 |
+| `KBOT_SANDBOX_MAX_CONCURRENT` | `4`，容量已满时拒绝，不排队 |
+| `KBOT_SANDBOX_TIMEOUT` | `30s`，使用带单位的时间格式 |
+
+Python 和 Shell 镜像可通过 `KBOT_SANDBOX_PYTHON_IMAGE`、`KBOT_SANDBOX_BASH_IMAGE` 配置，默认值见 `sandbox.DefaultConfig`，包含固定 digest。Runner 入口将代码执行容器的网络模式固定为 `none`。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/healthz` | 返回服务存活状态，不检查 Docker，不要求 token |
+| GET | `/readyz` | 检查 Docker 和镜像，失败返回 503，不要求 token |
+| POST | `/v1/executions` | 校验共享 Bearer Token，接收 language 和 code；容量已满返回 429 |
+
+独立沙箱的 token 是部署时配置给调用方和沙箱服务的共享凭据，与用户登录 JWT 用途不同。一般执行失败仍返回 HTTP 200，错误写在响应 JSON 的 `error` 中；客户端同时检查 HTTP 状态和该字段。
+
+另开终端验证：
+
+```bash
+curl -i --max-time 10 http://127.0.0.1:8081/readyz
+
+curl -i --max-time 40 \
+  -X POST http://127.0.0.1:8081/v1/executions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local-sandbox-demo-token-0123456789abcdef' \
+  --data '{"language":"python","code":"print(6 * 7)"}'
+```
+
+预期就绪检查返回 200；代码执行响应中 stdout 为 `"42\n"`、exit_code 为 0、timed_out 为 false，且不含 error 字段。本机 Go 入口运行和下述服务容器运行，均已由学习者手动验证成功。使用 curl 直接访问服务不会经过 Go 的 Client；Client 的通信另由本地 HTTP 自动化测试覆盖。
+
+### 将沙箱服务放进容器
+
+先停止上面的本机服务，避免重复占用 8081 端口。构建并启动：
+
+```bash
+docker build -f deploy/Dockerfile.sandbox-runner -t my-kbot-sandbox-runner:local .
+
+docker run --rm \
+  --name my-kbot-sandbox-runner \
+  -p 127.0.0.1:8081:8081 \
+  --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+  -e DOCKER_HOST=unix:///var/run/docker.sock \
+  -e KBOT_SANDBOX_RUNNER_ADDR=:8081 \
+  -e KBOT_SANDBOX_RUNNER_TOKEN=local-sandbox-demo-token-0123456789abcdef \
+  my-kbot-sandbox-runner:local
+```
+
+镜像中的 Docker CLI 通过挂载的 socket 使用同一个 Docker daemon。沙箱服务容器与代码执行容器是并列关系；socket 只挂载给服务容器，不传给代码执行容器。服务容器拥有管理该 daemon 的能力。启动后可以使用相同的 curl 命令验证，完成后执行：
+
+```bash
+docker stop --time 15 my-kbot-sandbox-runner
+```
+
+### Makefile 快捷命令
+
+`make build`、`make run`、`make test` 分别构建、启动、测试主模块；`make sandbox-runner-build` 构建本机沙箱程序，`make sandbox-runner-run` 通过 Go 入口启动沙箱服务；`make crossborder-build` 和 `make crossborder-test` 调用独立跨境模块的 Makefile。构建产物位于已忽略的 `bin/`。运行目标仍需提供相应环境变量，且不会自动启动服务镜像。
 
 ## 主服务接口
 
@@ -147,10 +234,12 @@ POST 的请求字段为 name、source_type、description、schema_json、endpoin
   "description": "根据 SKU 查询库存",
   "schema_json": "{\"type\":\"object\",\"properties\":{\"sku\":{\"type\":\"string\"}},\"required\":[\"sku\"]}",
   "endpoint_config": "{\"url\":\"https://example.com/api/inventory\"}",
-  "auth_config": "{\"Authorization\":\"Bearer demo-key\"}",
+  "auth_config": "{\"headers\":{\"Authorization\":\"Bearer demo-key\"}}",
   "sensitive": false
 }
 ```
+
+HTTP 工具执行器从 `auth_config` 的 `headers` 对象读取请求头，因此上例使用嵌套的 `headers` 格式；注册表本身只保存认证配置。联调脚本也使用这一格式，但仍仅验证工具创建和列表，不执行工具。
 
 创建成功返回 201，列表查询成功返回 200。响应包含 `has_auth` 标记，认证配置和端点等 `json:"-"` 字段不会直接输出。同一空间用相同名称再次创建新工具会返回 400；工具注册表支持同一 ToolID 的多个版本，但当前 POST 接口不接收客户端指定的 ToolID。
 

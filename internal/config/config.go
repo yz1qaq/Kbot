@@ -18,6 +18,10 @@ type Config struct {
 	LLMAPIKey  string
 	LLMModel   string
 	LLMTimeout time.Duration
+
+	// 沙箱服务连接配置
+	SandboxRunnerURL   string
+	SandboxRunnerToken string
 }
 
 func valueOrDefault(key, fallback string) string {
@@ -66,6 +70,11 @@ func Load() Config {
 			"KBOT_LLM_TIMEOUT_SECONDS",
 			30*time.Second,
 		),
+		SandboxRunnerURL: valueOrDefault(
+			"KBOT_SANDBOX_RUNNER_URL",
+			"http://127.0.0.1:8081",
+		),
+		SandboxRunnerToken: os.Getenv("KBOT_SANDBOX_RUNNER_TOKEN"),
 	}
 }
 
