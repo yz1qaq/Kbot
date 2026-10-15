@@ -37,7 +37,7 @@ func (e *Engine) ChatStream(ctx context.Context, req ChatRequest, emit Emitter) 
 	if err != nil {
 		return err
 	}
-	if err := emitContext(ctx, emit, Event{
+	if err = emitContext(ctx, emit, Event{
 		Type: "run_started",
 		Data: map[string]string{
 			"conversation_id":  conversationID,

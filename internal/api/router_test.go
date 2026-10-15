@@ -10,6 +10,7 @@ import (
 
 	"my_kbot/internal/domain"
 	"my_kbot/internal/platform/iam"
+	platformtool "my_kbot/internal/platform/tool"
 )
 
 func TestContextRequiresWorkspace(t *testing.T) {
@@ -226,5 +227,89 @@ func TestHTTPAuthFlow(t *testing.T) {
 				t.Fatal("rejected request must not enter SSE output")
 			}
 		})
+	}
+}
+
+func TestToolsHTTPFlow(t *testing.T) {
+	ctx := context.Background()
+	service := iam.New(
+		iam.NewMemoryStore(),
+		"0123456789abcdef0123456789abcdef",
+		"kbot-test",
+	)
+
+	user, err := service.Register(ctx, "tools@example.com", "password123", "工具测试")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	login, err := service.Login(ctx, user.Email, "password123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	workspaces, err := service.ListUserWorkspaces(ctx, user.ID)
+	if err != nil || len(workspaces) != 1 {
+		t.Fatalf("expected one workspace, got %d; error: %v", len(workspaces), err)
+	}
+
+	registry := platformtool.NewRegistry()
+	router := NewRouterWithControlPlane(
+		service,
+		nil,
+		ControlPlane{Tools: registry},
+	)
+
+	send := func(method, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(
+			method, "/api/v1/tools", strings.NewReader(body),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+login.Token)
+		req.Header.Set("X-Workspace-ID", workspaces[0].ID)
+
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		return response
+	}
+
+	body := `{
+		"name": "search_inventory",
+		"source_type": "http",
+		"schema_json": "{\"type\":\"object\"}",
+		"endpoint_config": "{\"url\":\"https://example.com/api/inventory\"}",
+		"auth_config": "demo-api-key"
+	}`
+
+	response := send(http.MethodPost, body)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	var created platformtool.Version
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created version: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("create response is missing the version ID")
+	}
+
+	listed := send(http.MethodGet, "")
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list status = %d", listed.Code)
+	}
+
+	var versions []platformtool.Version
+	if err := json.Unmarshal(listed.Body.Bytes(), &versions); err != nil {
+		t.Fatalf("decode tool list: %v", err)
+	}
+	if len(versions) != 1 ||
+		versions[0].ID != created.ID ||
+		versions[0].Name != "search_inventory" ||
+		!versions[0].HasAuth {
+		t.Fatal("tool list does not contain the expected version")
+	}
+
+	if strings.Contains(response.Body.String(), "demo-api-key") ||
+		strings.Contains(listed.Body.String(), "demo-api-key") {
+		t.Fatal("HTTP response exposes credentials")
 	}
 }

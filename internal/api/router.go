@@ -2,14 +2,22 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"my_kbot/internal/api/middleware"
 	"my_kbot/internal/platform/iam"
 	"net/http"
+	"time"
+
+	platformtool "my_kbot/internal/platform/tool"
 
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(iamService *iam.Service, runtimes ...ChatRuntime) http.Handler {
+type ControlPlane struct {
+	Tools *platformtool.Registry
+}
+
+func NewRouterWithControlPlane(iamService *iam.Service, runtime ChatRuntime, control ControlPlane) http.Handler {
 	router := chi.NewRouter()
 	//注册通用中间件
 	router.Use(middleware.Recoverer, middleware.RequestID)
@@ -75,16 +83,81 @@ func NewRouter(iamService *iam.Service, runtimes ...ChatRuntime) http.Handler {
 			},
 		)
 
-		if len(runtimes) > 0 && runtimes[0] != nil {
+		if control.Tools != nil {
+			protected.With(middleware.Workspace(iamService)).Get(
+				"/api/v1/tools",
+				func(w http.ResponseWriter, r *http.Request) {
+					versions := control.Tools.List(
+						r.Context(), middleware.WorkspaceID(r.Context()),
+					)
+					writeJSON(w, http.StatusOK, versions)
+				},
+			)
+			protected.With(middleware.Workspace(iamService)).Post(
+				"/api/v1/tools",
+				func(w http.ResponseWriter, r *http.Request) {
+					var req struct {
+						Name           string `json:"name"`
+						SourceType     string `json:"source_type"`
+						Description    string `json:"description"`
+						SchemaJSON     string `json:"schema_json"`
+						EndpointConfig string `json:"endpoint_config"`
+						AuthConfig     string `json:"auth_config"`
+						Sensitive      bool   `json:"sensitive"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+						http.Error(w, "invalid JSON", http.StatusBadRequest)
+						return
+					}
+					var endpoint struct {
+						URL string `json:"url"`
+					}
+
+					if err := json.Unmarshal([]byte(req.EndpointConfig), &endpoint); err != nil {
+						http.Error(w, "invalid endpoint_config", http.StatusBadRequest)
+						return
+					}
+					versionID := fmt.Sprintf("tool-version-%d", time.Now().UnixNano())
+					version := platformtool.Version{
+						ID:          versionID,
+						ToolID:      versionID,
+						WorkspaceID: middleware.WorkspaceID(r.Context()),
+						Name:        req.Name,
+						SourceType:  req.SourceType,
+						Description: req.Description,
+						InputSchema: []byte(req.SchemaJSON),
+						Endpoint:    endpoint.URL,
+						AuthConfig:  req.AuthConfig,
+						HasAuth:     req.AuthConfig != "",
+						Sensitive:   req.Sensitive,
+						Published:   true,
+						CreatedAt:   time.Now().UTC(),
+					}
+					if err := control.Tools.Register(r.Context(), version); err != nil {
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+					writeJSON(w, http.StatusCreated, version)
+				},
+			)
+		}
+
+		if runtime != nil {
 			protected.With(middleware.Workspace(iamService)).Post(
 				"/stream/agents/{agentsID}/chat",
-				NewstreamHandler(runtimes[0]).ServeHTTP,
+				NewstreamHandler(runtime).ServeHTTP,
 			)
 
 		}
 	})
-
 	return router
+}
+
+func firstRuntime(runtimes []ChatRuntime) ChatRuntime {
+	if len(runtimes) == 0 {
+		return nil
+	}
+	return runtimes[0]
 }
 
 // writeJSON 设置响应类型、状态码，并将数据编码为 JSON。
@@ -92,4 +165,12 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func NewRouter(iamService *iam.Service, runtimes ...ChatRuntime) http.Handler {
+	return NewRouterWithControlPlane(
+		iamService,
+		firstRuntime(runtimes),
+		ControlPlane{},
+	)
 }

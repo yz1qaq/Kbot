@@ -9,6 +9,7 @@ import (
 	"my_kbot/internal/domain"
 	"my_kbot/internal/platform"
 	"my_kbot/internal/platform/iam"
+	platformtool "my_kbot/internal/platform/tool"
 	"my_kbot/internal/runtime/engine"
 	"my_kbot/internal/runtime/llm"
 	"net/http"
@@ -25,6 +26,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	controlPlane := platform.New()
+	controlPlane.PutSnapshot(&engine.AgentSnapshot{
+		AgentVersionID: "demo-v1",
+		AgentID:        "demo",
+		SystemPrompt:   "你是kbot课堂助手",
+		MaxSteps:       4,
+	})
+	controlPlane.PutConversation(&domain.Conversation{
+		ID:             "demo-conversation",
+		AgentID:        "demo",
+		AgentVersionID: "demo-v1",
+	})
+
 	iamService := iam.New(
 		iam.NewMemoryStore(),
 		cfg.JWTSecret,
@@ -36,26 +50,13 @@ func main() {
 		log.Fatalf("create LLM gatway : %v", err)
 	}
 
-	controlPlane := platform.New()
-
-	controlPlane.PutSnapshot(&engine.AgentSnapshot{
-		AgentVersionID: "demo-v1",
-		AgentID:        "demo",
-		SystemPrompt:   "你是kbot课堂助手",
-		MaxSteps:       4,
-	})
-
-	controlPlane.PutConversation(&domain.Conversation{
-		ID:             "demo-conversation",
-		AgentID:        "demo",
-		AgentVersionID: "demo-v1",
-	})
-
 	runtime := engine.New(controlPlane, gateway)
+	toolRegistry := platformtool.NewRegistry()
+	cp := api.ControlPlane{Tools: toolRegistry}
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(iamService, runtime),
+		Handler:           api.NewRouterWithControlPlane(iamService, runtime, cp),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
