@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"my_kbot/internal/api/middleware"
 	"my_kbot/internal/runtime/engine"
 	"net/http"
 )
@@ -35,6 +36,7 @@ func (h *StreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+	req.WorkspaceID = middleware.WorkspaceID(r.Context())
 
 	//SSE响应
 	flusher, ok := w.(http.Flusher)

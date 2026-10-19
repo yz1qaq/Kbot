@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -47,6 +49,17 @@ type Executor struct {
 	client       *http.Client
 	allowedHosts map[string]struct{} //允许访问的主机名
 	sandbox      SandboxRunner       //执行工具
+}
+
+/*
+模型：我可以使用哪些工具？分别需要什么参数？
+执行器：这次调用具体执行哪个工具版本？
+Binding 将模型可见的工具说明与具体工具版本关联。
+*/
+type Binding struct {
+	Name      string
+	VersionID string
+	Info      *schema.ToolInfo //模型可见说明
 }
 
 var _ Registry = (*platformtool.Registry)(nil)
@@ -251,6 +264,8 @@ func validateArguments(schemaJSON, arguments []byte) error {
 
 }
 
+
+//执行器;传入工具调用拿到工具结果
 func (e *Executor) Execute(ctx context.Context, call Call) (Result, error) {
 	if e.registry == nil {
 		return Result{}, fmt.Errorf("tool registry is required")
@@ -338,4 +353,32 @@ func (e *Executor) Execute(ctx context.Context, call Call) (Result, error) {
 		return result, fmt.Errorf("tool returned HTTP %d", response.StatusCode)
 	}
 	return result, nil
+}
+
+// 根据工作空间和版本ID,得到版本信息,然后绑定起来
+func (e *Executor) Bind(ctx context.Context, workspaceID string, versionIDs []string) ([]Binding, error) {
+	bindings := make([]Binding, 0, len(versionIDs))
+	for _, versionID := range versionIDs {
+		version, err := e.registry.Resolve(ctx, workspaceID, versionID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve tool binding %s: %w", versionID, err)
+		}
+		//把版本信息解析道Schema中
+		params := &jsonschema.Schema{}
+		if err := json.Unmarshal(version.InputSchema, &params); err != nil {
+			return nil, fmt.Errorf("decode Schema for tool %s : %w", versionID, err)
+		}
+		binding := Binding{
+			Name:      version.Name,
+			VersionID: version.ID,
+			Info: &schema.ToolInfo{
+				Name:        version.Name,
+				Desc:        version.Description,
+				ParamsOneOf: schema.NewParamsOneOfByJSONSchema(params),
+			},
+		}
+		bindings = append(bindings, binding)
+
+	}
+	return bindings, nil
 }

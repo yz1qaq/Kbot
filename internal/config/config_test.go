@@ -17,6 +17,12 @@ func TestLoadAndValidate(t *testing.T) {
 	t.Setenv("KBOT_LLM_MODEL", "test-model")
 	t.Setenv("KBOT_LLM_TIMEOUT_SECONDS", "15")
 
+	t.Setenv("KBOT_SANDBOX_RUNNER_URL", "http://127.0.0.1:8081")
+	t.Setenv(
+		"KBOT_SANDBOX_RUNNER_TOKEN",
+		"0123456789abcdef0123456789abcdef",
+	)
+
 	cfg := Load()
 
 	if err := cfg.Validate(); err != nil {
@@ -97,13 +103,15 @@ func TestLoadLLMConfig(t *testing.T) {
 
 func TestValidateRejectsInvalidLLMConfig(t *testing.T) {
 	valid := Config{
-		HTTPAddr:   ":8080",
-		JWTSecret:  "0123456789abcdef0123456789abcdef",
-		JWTIssuer:  "kbot-test",
-		LLMBaseURL: "https://example.test/v1",
-		LLMAPIKey:  "test-api-key",
-		LLMModel:   "test-model",
-		LLMTimeout: 30 * time.Second,
+		HTTPAddr:           ":8080",
+		JWTSecret:          "0123456789abcdef0123456789abcdef",
+		JWTIssuer:          "kbot-test",
+		LLMBaseURL:         "https://example.test/v1",
+		LLMAPIKey:          "test-api-key",
+		LLMModel:           "test-model",
+		LLMTimeout:         30 * time.Second,
+		SandboxRunnerURL:   "http://127.0.0.1:8081",
+		SandboxRunnerToken: "0123456789abcdef0123456789abcdef",
 	}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("valid config was rejected: %v", err)

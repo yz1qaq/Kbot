@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"my_kbot/internal/domain"
+	"my_kbot/internal/runtime/tooling"
 
 	"github.com/cloudwego/eino/components/model"
 )
@@ -21,6 +22,7 @@ type AgentSnapshot struct {
 	WorkspaceID    string
 	SystemPrompt   string
 	MaxSteps       int
+	ToolVersionIDs []string //工具的版本列表
 }
 
 // platform 定义引擎读取绘画和配置快照所需的能力
@@ -29,9 +31,16 @@ type Platform interface {
 	GetAgentSnapshotByVersion(ctx context.Context, agentVersionID string) (*AgentSnapshot, error)
 }
 
+// ToolRuntime 定义聊天引擎需要的工具能力。
+type ToolRuntime interface {
+	Bind(ctx context.Context, workspaceID string, versionIDs []string) ([]tooling.Binding, error)
+	Execute(ctx context.Context, call tooling.Call) (tooling.Result, error)
+}
+
 type Engine struct {
 	platform Platform
 	model    model.BaseChatModel
+	tools    ToolRuntime //还没有保存好工具说明,需要先bind绑定
 }
 
 func New(p Platform, model model.BaseChatModel) *Engine {
@@ -39,6 +48,11 @@ func New(p Platform, model model.BaseChatModel) *Engine {
 		platform: p,
 		model:    model,
 	}
+}
+
+func (e *Engine) WithTools(tools ToolRuntime) *Engine {
+	e.tools = tools
+	return e
 }
 
 // 获取对应conversationID的agent快照
@@ -60,6 +74,12 @@ func (e *Engine) ResolveSnapshot(ctx context.Context, conversationID string) (*A
 	}
 	if snapshot.AgentVersionID != conversation.AgentVersionID {
 		return nil, fmt.Errorf("snapshot version mismatch:want %s,got %s", conversation.AgentVersionID, snapshot.AgentVersionID)
+	}
+	//会话的工作空间要和这个快照的工作空间一致
+	if conversation.WorkspaceID != "" && snapshot.WorkspaceID != "" && conversation.WorkspaceID != snapshot.WorkspaceID {
+		return nil, fmt.Errorf(
+			"conversation and agent snapshot belong to different workspaces",
+		)
 	}
 	return snapshot, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"my_kbot/internal/domain"
+	"strings"
 	"testing"
 
 	"github.com/cloudwego/eino/components/model"
@@ -125,5 +126,55 @@ func TestEmitContextHonorsCancellation(t *testing.T) {
 	}
 	if called {
 		t.Fatal("emitter must not run after context cancellation")
+	}
+}
+
+func TestChatStreamRejectsOtherActiveWorkspace(t *testing.T) {
+	controlPlane := &fakePlatform{
+		conversation: &domain.Conversation{
+			ID:             "conversation-001",
+			AgentVersionID: "version-001",
+			WorkspaceID:    "workspace-1",
+		},
+		snapshots: map[string]*AgentSnapshot{
+			"version-001": {
+				AgentVersionID: "version-001",
+				WorkspaceID:    "workspace-1",
+				SystemPrompt:   "你是一个客服助手",
+			},
+		},
+	}
+
+	chatModel := &sequenceChatModel{}
+	runtime := New(controlPlane, chatModel)
+
+	var events []Event
+	err := runtime.ChatStream(
+		context.Background(),
+		ChatRequest{
+			ConversationID: "conversation-001",
+			Message:        "查询库存",
+			WorkspaceID:    "workspace-2",
+		},
+		func(event Event) error {
+			events = append(events, event)
+			return nil
+		},
+	)
+
+	if err == nil {
+		t.Fatal("expected active workspace mismatch error")
+	}
+	if !strings.Contains(
+		err.Error(),
+		"conversation is outside the active workspace",
+	) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if chatModel.calls != 0 {
+		t.Fatalf("model calls = %d, want 0", chatModel.calls)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events = %+v, want no events", events)
 	}
 }

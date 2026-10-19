@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"my_kbot/internal/domain"
+	"strings"
 	"testing"
 )
 
@@ -63,4 +64,64 @@ func TestResolveSnapshotUsesConversationPinnedVersion(t *testing.T) {
 		)
 	}
 
+}
+
+func TestResolveSnapshotChecksWorkspace(t *testing.T) {
+	tests := []struct {
+		name              string
+		conversationSpace string
+		snapshotSpace     string
+		wantErr           bool
+	}{
+		{"same_workspace", "workspace-1", "workspace-1", false},
+		{"different_workspaces", "workspace-1", "workspace-2", true},
+		{"empty_conversation_workspace", "", "workspace-1", false},
+		{"empty_snapshot_workspace", "workspace-1", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controlPlane := &fakePlatform{
+				conversation: &domain.Conversation{
+					ID:             "conversation-1",
+					AgentVersionID: "agent-v1",
+					WorkspaceID:    tt.conversationSpace,
+				},
+				snapshots: map[string]*AgentSnapshot{
+					"agent-v1": {
+						AgentVersionID: "agent-v1",
+						WorkspaceID:    tt.snapshotSpace,
+					},
+				},
+			}
+
+			runtime := New(controlPlane, nil)
+			snapshot, err := runtime.ResolveSnapshot(
+				context.Background(),
+				"conversation-1",
+			)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected workspace mismatch error")
+				}
+				if !strings.Contains(err.Error(), "different workspaces") {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ResolveSnapshot(): %v", err)
+			}
+
+			if snapshot.WorkspaceID != tt.snapshotSpace {
+				t.Fatalf(
+					"snapshot workspace = %q, want %q",
+					snapshot.WorkspaceID,
+					tt.snapshotSpace,
+				)
+			}
+		})
+	}
 }

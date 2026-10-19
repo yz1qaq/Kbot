@@ -369,3 +369,76 @@ func TestExecutorRoutesCodeExecutionToSandboxRunner(t *testing.T) {
 		)
 	}
 }
+
+func TestExecutorBindBuildsToolInfo(t *testing.T) {
+	ctx := context.Background()
+	registry := platformtool.NewRegistry()
+
+	version := platformtool.Version{
+		ID:          "inventory-v1",
+		ToolID:      "inventory-tool",
+		WorkspaceID: "workspace-1",
+		Name:        "search_inventory",
+		SourceType:  "http",
+		Description: "根据 SKU 查询库存",
+		Endpoint:    "https://example.com/inventory",
+		InputSchema: []byte(`{
+			"type": "object",
+			"properties": {
+				"sku": {"type": "string"}
+			},
+			"required": ["sku"]
+		}`),
+		Published: true,
+	}
+
+	if err := registry.Register(ctx, version); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	executor := NewExecutor(registry, nil)
+	bindings, err := executor.Bind(
+		ctx,
+		"workspace-1",
+		[]string{"inventory-v1"},
+	)
+	if err != nil {
+		t.Fatalf("Bind(): %v", err)
+	}
+
+	if len(bindings) != 1 {
+		t.Fatalf("bindings count = %d, want 1", len(bindings))
+	}
+
+	binding := bindings[0]
+	if binding.Name != version.Name || binding.VersionID != version.ID {
+		t.Fatalf("unexpected binding: %+v", binding)
+	}
+
+	if binding.Info == nil || binding.Info.ParamsOneOf == nil {
+		t.Fatal("tool info or parameter description is missing")
+	}
+
+	if binding.Info.Name != version.Name ||
+		binding.Info.Desc != version.Description {
+		t.Fatalf("unexpected tool info: %+v", binding.Info)
+	}
+
+	params, err := binding.Info.ParamsOneOf.ToJSONSchema()
+	if err != nil {
+		t.Fatalf("ToJSONSchema(): %v", err)
+	}
+
+	if params == nil || params.Type != "object" || params.Properties == nil {
+		t.Fatalf("unexpected parameter schema: %+v", params)
+	}
+
+	sku, ok := params.Properties.Get("sku")
+	if !ok || sku == nil || sku.Type != "string" {
+		t.Fatalf("sku schema = %+v, want string", sku)
+	}
+
+	if len(params.Required) != 1 || params.Required[0] != "sku" {
+		t.Fatalf("required = %v, want [sku]", params.Required)
+	}
+}

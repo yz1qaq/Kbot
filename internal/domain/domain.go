@@ -53,6 +53,7 @@ Conversation 固定一次会话实际使用的 AgentVersion。
 */
 type Conversation struct {
 	ID             string //这是哪一次对话
+	WorkspaceID    string //这次会话属于哪个工作空间
 	AgentID        string //这次对话用的哪个助手
 	AgentVersionID string //具体实用助手的哪一版配置
 	UserID         string //是哪个用户创建的会话

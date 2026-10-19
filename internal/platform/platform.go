@@ -51,6 +51,7 @@ func (p *Platform) PutSnapshot(snapshot *engine.AgentSnapshot) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	copy := *snapshot
+	copy.ToolVersionIDs = append([]string(nil), snapshot.ToolVersionIDs...)
 	p.snapshots[copy.AgentVersionID] = &copy
 }
 
@@ -63,6 +64,10 @@ func (p *Platform) GetAgentSnapshotByVersion(_ context.Context, id string) (*eng
 		return nil, fmt.Errorf("agent snapshot %s not found", id)
 	}
 	copy := *snapshot
+	copy.ToolVersionIDs = append(
+		[]string(nil),
+		snapshot.ToolVersionIDs...,
+	)
 	return &copy, nil
 }
 

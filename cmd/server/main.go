@@ -12,6 +12,8 @@ import (
 	platformtool "my_kbot/internal/platform/tool"
 	"my_kbot/internal/runtime/engine"
 	"my_kbot/internal/runtime/llm"
+	"my_kbot/internal/runtime/sandbox"
+	"my_kbot/internal/runtime/tooling"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -52,6 +54,20 @@ func main() {
 
 	runtime := engine.New(controlPlane, gateway)
 	toolRegistry := platformtool.NewRegistry()
+
+	sandboxClient, err := sandbox.NewClient(cfg.SandboxRunnerURL, cfg.SandboxRunnerToken)
+	if err != nil {
+		log.Fatalf("create sandbox runner clinet: %v", err)
+	}
+	toolExecutor := tooling.NewExecutor(
+		toolRegistry,
+		nil,
+		"crossborder-sim",
+		"localhost",
+		"127.0.0.1",
+	).WithSandbox(sandboxClient)
+
+	runtime.WithTools(toolExecutor)
 	cp := api.ControlPlane{Tools: toolRegistry}
 
 	server := &http.Server{
