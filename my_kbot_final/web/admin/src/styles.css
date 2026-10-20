@@ -1,0 +1,72 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --page-background: oklch(0.973 0.003 255);
+  --surface: oklch(1 0 0);
+  --line: oklch(0.92 0.005 255);
+  --subtle-text: oklch(0.49 0.014 255);
+  --focus: oklch(0.6 0.22 259);
+  color: oklch(0.29 0.02 255);
+  background: var(--page-background);
+  font-synthesis: none;
+}
+
+html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
+.app-shell.ant-layout { min-height: 100vh; min-height: 100dvh; }
+.app-main-shell.ant-layout { min-width: 0; background: var(--page-background); }
+.app-sidebar .ant-layout-sider-children { display: flex; flex-direction: column; min-height: 100vh; }
+.app-sidebar nav { flex: 1; }
+.app-brand { display: flex; align-items: center; height: 64px; padding: 0 26px; color: white; font-size: 24px; font-weight: 700; letter-spacing: 0.5px; }
+.app-brand.is-collapsed { justify-content: center; padding: 0; }
+.sidebar-footer { padding: 22px 16px; color: oklch(0.76 0.02 255); font-size: 12px; text-align: center; white-space: nowrap; }
+.app-header.ant-layout-header { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.header-title { display: flex; align-items: center; gap: 12px; }
+.app-header .ant-tag { margin: 0; color: var(--subtle-text); }
+.app-content { min-width: 0; padding: 24px 28px; }
+.app-breadcrumb { margin-bottom: 18px; }
+.app-page-surface { max-width: 1280px; min-height: 520px; margin: 0 auto; padding: 32px; border-radius: 8px; background: var(--surface); }
+.page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.page-heading h2.ant-typography { margin: 0 0 9px; font-size: 26px; line-height: 1.4; letter-spacing: 0; }
+.page-description.ant-typography { margin: 0; color: var(--subtle-text); }
+.page-heading > .ant-btn { margin-top: 4px; }
+.status-banner.ant-alert { padding: 18px 20px; border-radius: 8px; }
+.status-banner .ant-alert-message { font-weight: 600; }
+.checks-section { margin-top: 36px; }
+.checks-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.checks-heading h3.ant-typography { margin: 0; font-size: 16px; line-height: 1.5; }
+.last-updated.ant-typography { color: var(--subtle-text); font-size: 12px; }
+.check-identity { display: grid; justify-items: start; gap: 5px; }
+.check-identity code { color: var(--subtle-text); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.check-description.ant-typography { font-size: 12px; color: var(--subtle-text); }
+.check-error.ant-typography { max-width: 34ch; font-size: 12px; overflow-wrap: anywhere; }
+.technical-value { font-size: 13px; font-variant-numeric: tabular-nums; }
+.checks-help.ant-typography { margin: 18px 0 0; font-size: 12px; line-height: 1.8; color: var(--subtle-text); }
+.content-footer { padding-top: 24px; color: var(--subtle-text); font-size: 12px; text-align: center; }
+.mobile-checks { border-top: 1px solid var(--line); }
+.mobile-check { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.mobile-check-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.mobile-check-heading .ant-tag { margin: 0; }
+.mobile-check .check-description.ant-typography { margin-bottom: 12px; }
+.mobile-metrics { display: flex; gap: 38px; margin: 0; }
+.mobile-metrics dt { margin-bottom: 4px; color: var(--subtle-text); font-size: 12px; }
+.mobile-metrics dd { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .app-content { padding: 20px; }
+  .app-page-surface { padding: 24px; }
+}
+@media (max-width: 600px) {
+  .app-sidebar.ant-layout-sider, .sidebar-toggle.ant-btn { display: none; }
+  .app-content { padding: 16px 12px; }
+  .app-header.ant-layout-header { padding: 0 16px; }
+  .app-page-surface { min-height: 0; padding: 22px 16px; }
+  .page-heading { flex-direction: column; gap: 16px; margin-bottom: 22px; }
+  .page-heading h2.ant-typography { font-size: 24px; }
+  .page-heading > .ant-btn { margin-top: 0; }
+  .checks-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .status-banner.ant-alert { padding: 14px; }
+  .checks-section { margin-top: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

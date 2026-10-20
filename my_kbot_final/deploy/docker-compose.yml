@@ -1,0 +1,25 @@
+name: kbot-final-learning
+
+services:
+  db:
+    image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
+
+    environment:
+      POSTGRES_USER: kbot
+      POSTGRES_PASSWORD: kbot
+      POSTGRES_DB: kbot
+
+    ports:
+      - "127.0.0.1:15432:5432"
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kbot -d kbot"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
