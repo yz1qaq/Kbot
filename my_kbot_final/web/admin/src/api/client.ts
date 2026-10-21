@@ -1,7 +1,29 @@
 import axios from 'axios'
+import { isSessionValid, useAuthStore } from '@/store/authStore'
 
-// 沿用 Final 的统一 Axios 入口。业务接口后续使用 /api/v1。
 export const api = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
 })
+
+api.interceptors.request.use((config) => {
+  const state = useAuthStore.getState()
+  if (state.token && !isSessionValid(state)) state.logout()
+  if (config.url !== '/auth/login' && isSessionValid(state)) {
+    config.headers.Authorization = `Bearer ${state.token}`
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401 && error.config?.url !== '/auth/login') {
+      useAuthStore.getState().logout()
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.assign('/login')
+      }
+    }
+    return Promise.reject(error)
+  },
+)

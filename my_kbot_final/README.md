@@ -14,9 +14,10 @@
 
 **第 3 天 IAM 业务服务与启动引导已完成。** 已实现创建用户的业务校验与 bcrypt、登录/JWT 签发和验签、管理员幂等引导及其配置。server 已组装 Queries → PostgresStore → Service，并在 HTTP 启动前按开关引导管理员；真实启动测试、静态检查及全模块竞态测试通过。
 
-当前 Web 仍只有状态页。HTTP 登录、管理员创建用户接口、鉴权中间件、工作空间业务接口和 Agent 聊天尚未接入；Service 的登录能力已验证，但还不能通过 HTTP 登录。父目录课程版已有功能不代表 Final 已完成。
+**第 4 天登录与管理员用户管理已完成。** 登录、会话恢复/退出、Auth/RequireGlobalAdmin、创建用户和分页列表已接入；UsersPage 可以查询、翻页、刷新及新建普通用户。真实 Go/PostgreSQL 与浏览器验收通过，普通用户及篡改前端角色均不能绕过服务端权限。工作空间与 Agent 聊天尚未接入，父目录课程版能力不代表 Final 已完成。
 
-- [20 天学习计划](docs/learning/20-day-plan.md) / [每日实际进度](docs/learning/progress.md)（第 1–3 天已完成，第 4 天待开始）
+- [20 天学习计划](docs/learning/20-day-plan.md) / [每日实际进度](docs/learning/progress.md)（第 1–4 天已完成）
+- [第 4 天登录与用户管理验收](docs/learning/day-04.md)
 - [第 1 天迁移验收](docs/learning/day-01.md) / [第 2 天用户存储验收](docs/learning/day-02.md) / [第 3 天 IAM 业务验收](docs/learning/day-03.md)
 - [基础阶段验收记录](docs/development/DEV-001.md) / [当前 IAM 任务](docs/development/DEV-002.md)
 - [产品范围](PRODUCT.md) / [界面设计约定](DESIGN.md)
@@ -35,7 +36,7 @@ internal/infrastructure/postgres/   连接池、queries SQL、sqlc 生成代码
 internal/platform/iam/              用户业务 Service、JWT、管理员引导及 PostgreSQL Store
 internal/api/                       Chi 路由与健康检查
 deploy/docker-compose.yml          本地独立 PostgreSQL
-web/admin/                         React 管理端，当前仅系统状态
+web/admin/                         React 管理端，系统状态、登录、会话与管理员用户管理
 docs/development/                  功能任务与验收记录
 ```
 
@@ -72,19 +73,40 @@ flowchart TD
     Store --> Queries
     Store --> Domain[domain.User 类型转换]
     Queries --> Pool
+    Router -->|POST /api/v1/auth/login| AuthHandler[v1.AuthHandler.Login]
+    AuthHandler --> JSON[v1.decodeJSON / writeJSON]
+    AuthHandler --> IAM
+    Router -->|POST /api/v1/auth/register| AuthMiddleware[middleware.Auth]
+    AuthMiddleware -->|验签 / 查询当前账号| IAM
+    AuthMiddleware -->|写入身份 context 后放行| AdminMiddleware[RequireGlobalAdmin]
+    Router -->|GET /api/v1/users| AuthMiddleware
+    AdminMiddleware --> ListUsersHandler[v1.IAMHandler.ListUsers]
+    ListUsersHandler --> Pagination[pageParams / queryInt]
+    ListUsersHandler --> IAM
+    AdminMiddleware --> CreateUserHandler[v1.AuthHandler.CreateUser]
+    CreateUserHandler --> IAM
     Router --> Health[GET /healthz: 返回 ok]
     Router --> Ready[GET /readyz: 逐个检查依赖]
     Ready --> Check[ReadinessCheck.Check = pool.Ping]
     Check --> Pool
     Page[React SystemStatusPage] --> Query[TanStack Query]
-    Query --> Client[system.ts / Axios client]
+    Query --> SystemAPI[system.ts]
+    SystemAPI --> Client[统一 Axios client]
+    LoginPage[React LoginPage] --> AuthAPI[auth.ts]
+    AuthAPI --> Client
+    UsersPage[React UsersPage] --> UsersQuery[TanStack Query / 按用户与页缓存]
+    UsersQuery --> UsersAPI[iam.listUsers]
+    UsersAPI --> Client
+    UsersPage -->|新建用户| AuthAPI
+    LoginPage --> AuthState[Zustand authStore / localStorage]
+    AuthState -->|业务请求 Bearer token| Client
     Client --> Proxy[Vite 同源代理 :15173]
     Proxy -->|转发到 :18090| Server
 ```
 
 迁移命令是独立入口，负责表结构和版本；server 不会在启动时自动运行迁移。启动入口现在会装配 pool → pgstore.New(pool) → NewPostgresStore → NewService，并按配置执行 EnsureSeedAdmin。引导发生在 HTTP 启动前；失败会记录日志并继续启动，需检查管理员就绪日志。
 
-Service 通过自己声明的 Store 接口调用 PostgreSQL 适配器，适配器负责领域类型与数据库行转换；bcrypt 处理密码哈希，JWT 使用配置密钥签名/验签。当前没有 API Handler → IAM 的登录调用路径，图中也未把登录鉴权中间件描述为已接入。
+Service 通过自己声明的 Store 接口调用 PostgreSQL 适配器，适配器负责领域类型与数据库行转换；bcrypt 处理密码哈希，JWT 使用配置密钥签名/验签。当前登录请求已由 API Handler 调用 IAM，返回 token/有效期/用户。客户端附带 Bearer；创建用户路由通过 Auth 验签并查询当前活跃账号，将身份/角色写入请求 context，再由 RequireGlobalAdmin 限制全局管理员。权限以数据库当前角色为准，角色降级或停用后，旧 token 也不能继续创建或查询用户列表。
 
 前端只请求 Go 服务，由 Go 服务检查数据库。`ReadinessCheck.Check` 是启动时注入的检查函数；路由层通过它调用连接池，无需在处理函数中创建新的连接池。
 
@@ -146,7 +168,7 @@ npm ci
 npm run dev
 ```
 
-打开 [系统状态页](http://127.0.0.1:15173/)。页面加载时检查一次，点击“重新检查”再次发送请求。修改后端端口时，需要同时修改 `web/admin/vite.config.ts` 中的代理目标。当前 Vite 开发代理将 `/healthz`、`/readyz`、`/api`、`/stream` 转发至 `127.0.0.1:18090`。
+打开 [登录页](http://127.0.0.1:15173/login)，使用开发库已有账号登录；首次账号由上述启动引导创建，改变引导密码不会重置已有密码。成功后进入系统状态页，管理员可在导航中打开[用户管理](http://127.0.0.1:15173/users)，查询、翻页、刷新或新建普通用户；普通账号没有此菜单。页头显示账号并可退出；刷新保留登录，密码不写入 localStorage。也可匿名打开 [系统状态页](http://127.0.0.1:15173/)。状态页加载时检查一次，点击“重新检查”再次发送请求。修改后端端口时，需要同时修改 `web/admin/vite.config.ts` 中的代理目标。当前 Vite 开发代理将 `/healthz`、`/readyz`、`/api`、`/stream` 转发至 `127.0.0.1:18090`；隔离联调时可通过 `KBOT_DEV_API_TARGET` 指定其他后端。
 
 后端和前端分别使用所在终端的 Ctrl+C 停止。数据库可用以下命令停止，保留卷中的数据：
 
@@ -171,6 +193,9 @@ go test ./internal/infrastructure/postgres/sqlc
 | --- | --- | --- |
 | `GET /healthz` | 200，`ok` | HTTP 服务能响应 |
 | `GET /readyz` | 200，`ok` | PostgreSQL 连接可用；检查失败返回 503 |
+| `POST /api/v1/auth/login` | 200，token/expires_at/user | 公开登录；JSON 错误 400，登录失败统一 401，其他方法 405 |
+| `POST /api/v1/auth/register` | 201，普通用户记录 | 管理员创建用户；认证失败 401、非管理员 403、输入错误 400；重复邮箱当前沿用参考返回 500 |
+| `GET /api/v1/users?limit=20&offset=0` | 200，用户数组 | 全局管理员；默认 50/0，limit 1–200，空页 []；不返回总数 |
 
 服务运行时停止本项目数据库，再在页面点击“重新检查”：后端服务仍为 200，PostgreSQL 为 503，整体显示“依赖尚未就绪”。随后执行 `docker compose -f deploy/docker-compose.yml up -d --wait db`，再次检查应恢复“服务已就绪”。本阶段已实际完成上述停止、恢复验证。
 
@@ -193,7 +218,7 @@ npm test
 npm run build
 ```
 
-已通过 Go 静态检查、带真实 PostgreSQL 的竞态测试、6 项前端请求层测试和 TypeScript/生产构建；浏览器验证覆盖正常响应、手动刷新、数据库停止与恢复，以及桌面和 390px/320px 手机布局。构建仍有单个 JS 包超过 500 kB 的体积提示，后续随页面增加再评估拆包。
+已通过 Go 静态检查、带真实 PostgreSQL 的竞态测试、23 项前端测试和 TypeScript/生产构建；浏览器验证覆盖正常响应、手动刷新、数据库停止与恢复，以及桌面和 390px/320px 手机布局。构建仍有单个 JS 包超过 500 kB 的体积提示，后续随页面增加再评估拆包。
 
 第 1 天新增检查：`go vet ./...` 与带真实 PostgreSQL 的 `go test -race -count=1 ./...` 全部通过，开发库版本 1/非 dirty，临时验收库已清理。本阶段未改动前端，没有重复执行先前的浏览器和前端构建验收。
 
@@ -201,4 +226,6 @@ npm run build
 
 第 3 天验收（2026-10-21）：IAM 创建/登录/验签/管理员引导、配置、真实启动测试及 `go vet ./...`、带真实 PostgreSQL 的全模块竞态测试全部通过。开发库仍为版本 1、dirty=false；IAM/启动隔离 schema 和迁移临时数据库残留均为 0。本日没有改前端，未重复执行历史浏览器验收。
 
-当前验证不涉及真实模型 API、Agent 工具执行或 HTTP 登录链路。
+第 4 天验收（2026-10-21）：go vet ./...、带真实 PG 的全模块竞态测试、前端 23 项测试与生产构建通过。真实浏览器验证登录→管理员创建→列表刷新/分页→新成员登录、普通用户/篡改角色 403、无效 token 401 清会话、重复邮箱提示、连接失败重试和 390/320px 布局；dist 预览亦实际连接 Go/PG 验证。隔离进程/schema 已清理，开发库仍 1/dirty=false；详见 [验收记录](docs/learning/day-04.md)。
+
+构建仍有单包体积提示；npm audit 当前有 6 项既有依赖告警（2 moderate/4 high），涉及 Axios/Vite/Vitest 等，未擅自升级参考依赖，详见第 4 天记录。当前验证不涉及真实模型 API或 Agent 工具执行。

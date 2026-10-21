@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/url"
@@ -126,6 +127,33 @@ func TestServerBootstrapPostgres(t *testing.T) {
 				t.Fatal("server did not become ready within startup deadline")
 			}
 			time.Sleep(40 * time.Millisecond)
+		}
+		// 请求经过真实监听端口、Chi 路由、AuthHandler、IAM 和隔离 PG。
+		loginResponse, err := client.Post(
+			"http://"+addr+"/api/v1/auth/login", "application/json",
+			strings.NewReader(`{"email":"bootstrap-test@example.com","password":"password123"}`),
+		)
+		if err != nil {
+			t.Fatalf("call actual login route: %v", err)
+		}
+		if enabled {
+			var result struct {
+				Token string `json:"token"`
+				User  struct {
+					Email string `json:"email"`
+					Role  string `json:"role"`
+				} `json:"user"`
+			}
+			decodeErr := json.NewDecoder(loginResponse.Body).Decode(&result)
+			loginResponse.Body.Close()
+			if loginResponse.StatusCode != http.StatusOK || decodeErr != nil || result.Token == "" || result.User.Email != "bootstrap-test@example.com" || result.User.Role != "admin" {
+				t.Fatal("actual server must accept the original seed password and return the admin login response")
+			}
+		} else {
+			loginResponse.Body.Close()
+			if loginResponse.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("login without an account must return 401, got %d", loginResponse.StatusCode)
+			}
 		}
 		if err := cmd.Process.Signal(os.Interrupt); err != nil {
 			t.Fatalf("signal server: %v", err)

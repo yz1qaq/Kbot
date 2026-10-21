@@ -53,10 +53,12 @@ func run() error {
 		}
 	}
 
-	handler := (&api.Handler{}).SetReadiness(api.ReadinessCheck{
-		Name:  "postgres",
-		Check: pool.Ping,
-	})
+	handler := api.NewHandler(iamService).SetReadiness(
+		api.ReadinessCheck{
+			Name:  "postgres",
+			Check: pool.Ping,
+		},
+	)
 
 	server := &http.Server{
 		Addr:              cfg.Addr,

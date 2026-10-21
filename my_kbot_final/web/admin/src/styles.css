@@ -70,3 +70,61 @@ html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* 登录沿用管理端颜色与表单组件，独立于控制台侧栏。 */
+.header-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.header-user-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.login-page { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 32px 20px; background: var(--page-background); }
+.login-panel { width: 100%; max-width: 400px; padding: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.login-brand { margin-bottom: 28px; font-size: 24px; line-height: 1.4; font-weight: 700; color: oklch(0.29 0.02 255); }
+.login-brand span { margin-left: 8px; color: var(--subtle-text); font-size: 14px; font-weight: 400; }
+.login-panel h1.ant-typography { margin: 0 0 8px; font-size: 26px; line-height: 1.4; }
+.login-description.ant-typography { margin-bottom: 28px; color: var(--subtle-text); }
+.login-error.ant-alert { margin-bottom: 22px; }
+.login-submit.ant-btn { margin-top: 4px; }
+.login-footer { margin-top: 24px; text-align: center; }
+@media (max-width: 600px) {
+  .header-actions { gap: 8px; }
+  .header-user-name { max-width: 100px; }
+  .header-user-role.ant-tag, .environment-tag.ant-tag { display: none; }
+  .login-page { padding: 24px 16px; }
+  .login-panel { padding: 28px 24px; }
+}
+
+/* 深一档的主操作蓝，确保白色按钮文字和链接达到正文对比度。 */
+.login-page .login-submit.ant-btn-primary,
+.app-header .header-actions .ant-btn-primary { background: oklch(0.52 0.2 259); }
+.login-page .login-submit.ant-btn-primary:not(:disabled):hover,
+.app-header .header-actions .ant-btn-primary:not(:disabled):hover { background: oklch(0.47 0.2 259); }
+.login-footer a { color: oklch(0.48 0.19 259); }
+.login-footer a:hover { color: oklch(0.43 0.19 259); }
+
+
+/* 用户管理沿用表格 + 新建表单，小屏改为逐条信息。 */
+.app-page-surface .ant-btn-primary { background: oklch(0.52 0.2 259); }
+.app-page-surface .ant-btn-primary:not(:disabled):hover { background: oklch(0.47 0.2 259); }
+.mobile-navigation { display: none; }
+.user-cell-text, .user-email { overflow-wrap: anywhere; word-break: break-word; }
+.user-cell-text { display: inline-block; max-width: 32ch; }
+.users-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; }
+.users-pagination .ant-typography { color: var(--subtle-text); font-size: 13px; }
+.user-form-help, .ant-form-item-extra { color: var(--subtle-text) !important; }
+.user-create-error { margin-bottom: 20px; }
+.mobile-user { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.mobile-user-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.mobile-user-heading .ant-typography { overflow-wrap: anywhere; min-width: 0; }
+.mobile-user-heading .ant-tag { flex-shrink: 0; margin: 0; }
+.mobile-user .user-email { margin: 8px 0 12px; }
+.mobile-user-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--subtle-text); font-size: 12px; }
+@media (max-width: 600px) {
+  .mobile-navigation { display: flex; gap: 24px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .mobile-navigation a { color: var(--subtle-text); }
+  .mobile-navigation a[aria-current="page"] { color: oklch(0.48 0.19 259); font-weight: 600; }
+  .users-pagination { align-items: flex-start; flex-direction: column; gap: 12px; }
+}
+
+.user-create-modal .ant-btn-primary { background: oklch(0.52 0.2 259); }
+.user-create-modal .ant-btn-primary:not(:disabled):hover { background: oklch(0.47 0.2 259); }
+
+.user-status-active.ant-tag { color: #237804; }
+.user-status-other.ant-tag { color: #595959; }

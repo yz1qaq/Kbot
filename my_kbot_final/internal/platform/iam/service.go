@@ -181,3 +181,15 @@ func (s *Service) EnsureSeedAdmin(ctx context.Context, email, password string) e
 	}
 	return nil
 }
+
+// 根据userID查询user
+func (s *Service) GetUser(ctx context.Context, userID string) (*domain.User, error) {
+	return s.store.GetUserByID(ctx, userID)
+}
+
+func (s *Service) ListUsers(ctx context.Context, limit, offset int32) ([]*domain.User, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	return s.store.ListUsers(ctx, limit, offset)
+}

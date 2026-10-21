@@ -10,7 +10,7 @@ product
 
 ## Product Purpose
 
-按功能逐步复写 Q1mi/kbot 的 Final。学习者手写 Go 后端，助手编写配套 Web、测试和联调说明。当前 DEV-001 只提供服务存活和 PostgreSQL 就绪状态。
+按功能逐步复写 Q1mi/kbot 的 Final。学习者手写 Go 后端，助手编写配套 Web、测试和联调说明。当前已提供服务存活、PostgreSQL 就绪状态、真实账号登录与会话恢复/退出，以及管理员查询/创建用户。后续按对应后端功能逐步接入工作空间。
 
 ## Brand Personality
 

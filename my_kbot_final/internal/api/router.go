@@ -3,6 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"my_kbot_final/internal/api/middleware"
+	v1 "my_kbot_final/internal/api/v1"
+	"my_kbot_final/internal/platform/iam"
 	"net/http"
 	"time"
 
@@ -16,7 +19,14 @@ type ReadinessCheck struct {
 }
 
 type Handler struct {
-	readiness []ReadinessCheck
+	iamService *iam.Service
+	readiness  []ReadinessCheck
+}
+
+func NewHandler(iamService *iam.Service) *Handler {
+	return &Handler{
+		iamService: iamService,
+	}
 }
 
 // 保存依赖检查函数
@@ -51,5 +61,30 @@ func (h *Handler) Routes() http.Handler {
 	})
 
 	r.Get("/readyz", h.ready)
+
+	if h.iamService != nil {
+		r.Route("/api/v1", func(r chi.Router) {
+			authHandler := v1.NewAuthHandler(h.iamService)
+			iamHandler := v1.NewIAMHandler(h.iamService)
+			r.Post("/auth/login", authHandler.Login)
+
+			r.Group(func(protected chi.Router) {
+				//需要认证
+				protected.Use(middleware.Auth(h.iamService))
+				//创建用户需要全局管理员权限
+				protected.With(middleware.RequireGlobalAdmin()).Post(
+					"/auth/register",
+					authHandler.CreateUser,
+				)
+				protected.With(middleware.RequireGlobalAdmin()).Get(
+					"/users",
+					iamHandler.ListUsers,
+				)
+
+			})
+
+		})
+
+	}
 	return r
 }
