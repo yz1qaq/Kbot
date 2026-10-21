@@ -12,10 +12,12 @@
 
 **第 2 天 sqlc 与 PostgreSQL 用户存储已完成。** 五条用户查询可重复生成；PostgresStore 已实现创建、按邮箱/ID 查询、分页列表与角色更新。真实数据库测试验证默认值、UUID/时间写回、错误处理，以及关闭连接池后用新池查询用户。
 
-当前 Web 仍只有状态页。IAM Store 尚未装配进 server；用户创建业务校验、密码哈希、登录/JWT、工作空间业务接口和 Agent 聊天尚未接入。父目录课程版已有功能不代表 Final 已完成。
+**第 3 天 IAM 业务服务与启动引导已完成。** 已实现创建用户的业务校验与 bcrypt、登录/JWT 签发和验签、管理员幂等引导及其配置。server 已组装 Queries → PostgresStore → Service，并在 HTTP 启动前按开关引导管理员；真实启动测试、静态检查及全模块竞态测试通过。
 
-- [20 天学习计划](docs/learning/20-day-plan.md) / [每日实际进度](docs/learning/progress.md)（第 1、2 天已完成，第 3 天待开始）
-- [第 1 天迁移验收](docs/learning/day-01.md) / [第 2 天用户存储验收](docs/learning/day-02.md)
+当前 Web 仍只有状态页。HTTP 登录、管理员创建用户接口、鉴权中间件、工作空间业务接口和 Agent 聊天尚未接入；Service 的登录能力已验证，但还不能通过 HTTP 登录。父目录课程版已有功能不代表 Final 已完成。
+
+- [20 天学习计划](docs/learning/20-day-plan.md) / [每日实际进度](docs/learning/progress.md)（第 1–3 天已完成，第 4 天待开始）
+- [第 1 天迁移验收](docs/learning/day-01.md) / [第 2 天用户存储验收](docs/learning/day-02.md) / [第 3 天 IAM 业务验收](docs/learning/day-03.md)
 - [基础阶段验收记录](docs/development/DEV-001.md) / [当前 IAM 任务](docs/development/DEV-002.md)
 - [产品范围](PRODUCT.md) / [界面设计约定](DESIGN.md)
 
@@ -30,7 +32,7 @@ internal/util/                      UUID 生成函数
 internal/config/                    配置加载与校验
 sqlc.yaml                          SQL 到 Go 的生成配置
 internal/infrastructure/postgres/   连接池、queries SQL、sqlc 生成代码
-internal/platform/iam/              用户 PostgreSQL Store 与领域类型适配
+internal/platform/iam/              用户业务 Service、JWT、管理员引导及 PostgreSQL Store
 internal/api/                       Chi 路由与健康检查
 deploy/docker-compose.yml          本地独立 PostgreSQL
 web/admin/                         React 管理端，当前仅系统状态
@@ -55,7 +57,18 @@ flowchart TD
     UserSQL[queries/iam.sql] --> SQLC[sqlc 1.27.0]
     MigrationFiles -->|表结构输入| SQLC
     SQLC --> Queries[pgstore.Queries]
-    StoreTests[真实 PG 存储测试] --> Store[iam.PostgresStore]
+    Main -->|pgstore.New| Queries
+    Main -->|NewPostgresStore| Store[iam.PostgresStore]
+    Main -->|NewService| IAM[iam.Service]
+    Config -->|JWTKeyBytes| IAM
+    Main -->|AutoseedAdmin=true| Seed[EnsureSeedAdmin]
+    Seed --> IAM
+    IAM --> Port[iam.Store 接口]
+    Port -->|注入的实现| Store
+    IAM --> Bcrypt[bcrypt 密码哈希与校验]
+    IAM --> JWT[JWT HS256 签名与验签]
+    StoreTests[真实 PG 存储测试] --> Store
+    ServiceTests[业务与真实启动测试] --> IAM
     Store --> Queries
     Store --> Domain[domain.User 类型转换]
     Queries --> Pool
@@ -69,7 +82,9 @@ flowchart TD
     Proxy -->|转发到 :18090| Server
 ```
 
-迁移命令是独立入口，负责表结构和版本；server 不会在启动时自动运行迁移。IAM Store 的独立存储链已在测试中装配为 pool → pgstore.New(pool) → NewPostgresStore；图中的 Store 测试路径尚未由 server 或 HTTP Handler 调用。
+迁移命令是独立入口，负责表结构和版本；server 不会在启动时自动运行迁移。启动入口现在会装配 pool → pgstore.New(pool) → NewPostgresStore → NewService，并按配置执行 EnsureSeedAdmin。引导发生在 HTTP 启动前；失败会记录日志并继续启动，需检查管理员就绪日志。
+
+Service 通过自己声明的 Store 接口调用 PostgreSQL 适配器，适配器负责领域类型与数据库行转换；bcrypt 处理密码哈希，JWT 使用配置密钥签名/验签。当前没有 API Handler → IAM 的登录调用路径，图中也未把登录鉴权中间件描述为已接入。
 
 前端只请求 Go 服务，由 Go 服务检查数据库。`ReadinessCheck.Check` 是启动时注入的检查函数；路由层通过它调用连接池，无需在处理函数中创建新的连接池。
 
@@ -99,15 +114,29 @@ go run ./cmd/migrate -version
 
 ```bash
 cd /Users/yz1/my_kbot/my_kbot_final
+# 当前终端尚未设置密钥时生成一次；后续启动复用相同值。
+if [ -z "${KBOT_JWT_SECRET_KEY:-}" ]; then
+  export KBOT_JWT_SECRET_KEY="$(openssl rand -hex 32)"
+fi
+# 首次需要管理员账号时开启；不设置则默认关闭。
+export KBOT_AUTOSEED_ADMIN=true
+export KBOT_AUTOSEED_ADMIN_EMAIL='admin@example.com'
+export KBOT_AUTOSEED_ADMIN_PASSWORD='local-admin-pass-123'
 go run ./cmd/server
 ```
 
-默认监听 `:18090`；本地数据库端口为 `15432`，数据库、用户名和密码均为 `kbot`。这些是开发配置。
+默认监听 `:18090`；本地数据库端口为 `15432`，数据库、用户名和密码均为 `kbot`。这些是开发配置。JWT 密钥必须显式提供且至少 32 字节；不同启动实例应复用同一值，新终端需重新设置相同密钥，换密钥会使旧 token 验签失败。环境变量不会因为写在命令示例中就自动持久化。
+
+开启引导后预期看到 `admin ready: ...`；重复启动不会覆盖已有账号密码，换引导密码也不会重置账号。首次引导成功后可将 KBOT_AUTOSEED_ADMIN 设为 false。
 
 | 环境变量 | 默认值 |
 | --- | --- |
 | `KBOT_ADDR` | `:18090` |
 | `KBOT_DATABASE_URL` | `postgres://kbot:kbot@localhost:15432/kbot?sslmode=disable` |
+| `KBOT_JWT_SECRET_KEY` | 无，必填且至少 32 字节 |
+| `KBOT_AUTOSEED_ADMIN` | `false`，只有字符串 `true` 开启 |
+| `KBOT_AUTOSEED_ADMIN_EMAIL` | `admin@example.com` |
+| `KBOT_AUTOSEED_ADMIN_PASSWORD` | `admin12345`，仅首次创建时使用 |
 
 终端二，启动前端：
 
@@ -155,7 +184,7 @@ KBOT_TEST_DATABASE_URL='postgres://kbot:kbot@127.0.0.1:15432/kbot?sslmode=disabl
   go test -race -count=1 ./...
 ```
 
-未配置 `KBOT_TEST_DATABASE_URL` 时，真实数据库测试会跳过，其余单元测试仍会运行。表结构和多数用户 Store 测试使用随机 schema 和回滚事务；重连持久化测试在独立 schema 中提交并更换连接池，结束后清理；`cmd/migrate` 命令测试会创建独立临时数据库，验证 up、重复 up、版本、down 和重建后清理。测试账号需要创建测试数据库的权限，本地 Compose 的开发账号满足此条件。
+未配置 `KBOT_TEST_DATABASE_URL` 时，真实数据库测试会跳过，其余单元测试仍会运行。表结构和多数用户 Store 测试使用随机 schema 和回滚事务；重连持久化测试在独立 schema 中提交并更换连接池，结束后清理；`cmd/migrate` 命令测试会创建独立临时数据库，验证 up、重复 up、版本、down 和重建后清理。真实启动测试还会在子进程中运行 server，用隔离 schema 和临时端口验证引导开关、重启保留密码、readyz 与 SIGINT 优雅退出。配置测试清理相关环境变量，避免本机配置影响结果。测试账号需要创建测试数据库的权限，本地 Compose 的开发账号满足此条件。
 
 前端，在 `web/admin` 执行：
 
@@ -169,5 +198,7 @@ npm run build
 第 1 天新增检查：`go vet ./...` 与带真实 PostgreSQL 的 `go test -race -count=1 ./...` 全部通过，开发库版本 1/非 dirty，临时验收库已清理。本阶段未改动前端，没有重复执行先前的浏览器和前端构建验收。
 
 第 2 天验收（2026-10-21）：用户 Store 的 9 项顶层测试、Go 静态检查和全模块竞态测试全部通过；sqlc 在临时目录重新生成的四个文件逐字节一致；开发库版本不变，测试资源已清理。本轮未改前端，未重复执行其历史验收。
+
+第 3 天验收（2026-10-21）：IAM 创建/登录/验签/管理员引导、配置、真实启动测试及 `go vet ./...`、带真实 PostgreSQL 的全模块竞态测试全部通过。开发库仍为版本 1、dirty=false；IAM/启动隔离 schema 和迁移临时数据库残留均为 0。本日没有改前端，未重复执行历史浏览器验收。
 
 当前验证不涉及真实模型 API、Agent 工具执行或 HTTP 登录链路。

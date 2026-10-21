@@ -13,6 +13,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	pgstore "my_kbot_final/internal/infrastructure/postgres/sqlc"
+	"my_kbot_final/internal/platform/iam"
 )
 
 func main() {
@@ -37,6 +40,18 @@ func run() error {
 		return fmt.Errorf("open database %w", err)
 	}
 	defer pool.Close()
+
+	queries := pgstore.New(pool)
+	iamStore := iam.NewPostgresStore(pool, queries)
+	iamService := iam.NewService(iamStore, cfg.JWTKeyBytes())
+
+	if cfg.AutoseedAdmin {
+		if err := iamService.EnsureSeedAdmin(ctx, cfg.AutoseedAdminEmail, cfg.AutoseedAdminPassword); err != nil {
+			log.Printf("autoseed amin:%v", err)
+		} else {
+			log.Printf("admin ready: %s", cfg.AutoseedAdminEmail)
+		}
+	}
 
 	handler := (&api.Handler{}).SetReadiness(api.ReadinessCheck{
 		Name:  "postgres",

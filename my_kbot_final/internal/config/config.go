@@ -14,6 +14,15 @@ type Config struct {
 
 	// DatabaseURL 是 PostgreSQL 数据库连接字符串。
 	DatabaseURL string
+
+	// JWT 签名和验签使用的密钥。
+	JWTSecretKey string
+
+	// 是否在启动时引导管理员账号。
+	AutoseedAdmin bool
+
+	AutoseedAdminEmail    string
+	AutoseedAdminPassword string
 }
 
 // Load 从环境变量读取配置。
@@ -24,6 +33,11 @@ func Load() Config {
 			"KBOT_DATABASE_URL",
 			"postgres://kbot:kbot@localhost:15432/kbot?sslmode=disable",
 		),
+		JWTSecretKey: os.Getenv("KBOT_JWT_SECRET_KEY"),
+
+		AutoseedAdmin:         getenv("KBOT_AUTOSEED_ADMIN", "false") == "true",
+		AutoseedAdminEmail:    getenv("KBOT_AUTOSEED_ADMIN_EMAIL", "admin@example.com"),
+		AutoseedAdminPassword: getenv("KBOT_AUTOSEED_ADMIN_PASSWORD", "admin12345"),
 	}
 }
 
@@ -43,9 +57,18 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.DatabaseURL) == "" {
 		missing = append(missing, "KBOT_DATABASE_URL")
 	}
+	if strings.TrimSpace(c.JWTSecretKey) == "" {
+		missing = append(missing, "KBOT_JWT_SECRET_KEY")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("缺少必填配置: %v", missing)
 	}
+	if len(c.JWTSecretKey) < 32 {
+		return fmt.Errorf("KBOT_JWT_SECRET_KEY至少需要32字节")
+	}
 	return nil
 }
-	
+
+func (c Config) JWTKeyBytes() []byte {
+	return []byte(c.JWTSecretKey)
+}

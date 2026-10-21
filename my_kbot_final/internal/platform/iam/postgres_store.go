@@ -17,6 +17,8 @@ type PostgresStore struct {
 	q  *pgstore.Queries
 }
 
+var _ Store = (*PostgresStore)(nil)
+
 const (
 	GlobalRoleAdmin  = "admin"
 	GlobalRoleMember = "member"
@@ -144,5 +146,3 @@ func (s *PostgresStore) SetUserRole(
 		Role: role,
 	})
 }
-
-
