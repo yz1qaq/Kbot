@@ -11,6 +11,7 @@ api.interceptors.request.use((config) => {
   if (state.token && !isSessionValid(state)) state.logout()
   if (config.url !== '/auth/login' && isSessionValid(state)) {
     config.headers.Authorization = `Bearer ${state.token}`
+    if (state.workspaceId) config.headers['X-Workspace-ID'] = state.workspaceId
   }
   return config
 })

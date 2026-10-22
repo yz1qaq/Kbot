@@ -91,7 +91,7 @@ function UsersContent({ userID }: { userID: string }) {
       action={<Button size="small" onClick={() => void query.refetch()} loading={query.isFetching}>重试</Button>} />
       : screens.md ? <Table<User> rowKey="id" dataSource={users} loading={query.isPending || query.isFetching} pagination={false}
         locale={{ emptyText: <Empty description="当前页暂无用户" /> }} columns={[
-          { title: '姓名', dataIndex: 'name', render: (value: string) => <span className="user-cell-text">{value || '—'}</span> },
+          { title: '姓名 / 用户 ID', dataIndex: 'name', render: (value: string, user: User) => <Space direction="vertical" size={4}><span className="user-cell-text">{value || '—'}</span><Typography.Text className="workspace-id" copyable>{user.id}</Typography.Text></Space> },
           { title: '邮箱', dataIndex: 'email', render: (value: string) => <span className="user-cell-text">{value}</span> },
           { title: '全局角色', dataIndex: 'role', render: role },
           { title: '状态', dataIndex: 'status', render: status },
@@ -102,6 +102,7 @@ function UsersContent({ userID }: { userID: string }) {
           : users.map(user => <article className="mobile-user" key={user.id}>
             <div className="mobile-user-heading"><Typography.Text strong>{user.name || '—'}</Typography.Text>{status(user.status)}</div>
             <Typography.Paragraph className="user-email">{user.email}</Typography.Paragraph>
+            <Typography.Paragraph className="workspace-id" copyable>{user.id}</Typography.Paragraph>
             <div className="mobile-user-meta"><span>{role(user.role)}</span><time>{createdAt(user.created_at)}</time></div>
           </article>)}
       </div>}

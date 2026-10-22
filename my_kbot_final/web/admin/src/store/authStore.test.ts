@@ -30,12 +30,33 @@ describe('persisted login state', () => {
     useAuthStore.getState().setAuth('test-token', user, new Date(Date.now() + 60_000).toISOString())
     useAuthStore.getState().logout()
     const persisted = JSON.parse(values.get('my-kbot-final-auth') ?? '{}').state
-    expect(persisted).toEqual({ token: null, user: null, expiresAt: null })
+    expect(persisted).toEqual({ token: null, user: null, expiresAt: null, workspaceId: null })
   })
   it('rejects expired and incomplete sessions', async () => {
     const { isSessionValid } = await import('./authStore')
     expect(isSessionValid({ token: 'test-token', expiresAt: new Date(Date.now() - 60_000).toISOString() })).toBe(false)
     expect(isSessionValid({ token: 'test-token', expiresAt: null })).toBe(false)
     expect(isSessionValid({ token: null, expiresAt: new Date(Date.now() + 60_000).toISOString() })).toBe(false)
+  })
+})
+
+describe('workspace selection belongs to the signed-in account', () => {
+  it('restores a selection after reload and clears it on logout', async () => {
+    const first = await import('./authStore')
+    first.useAuthStore.getState().setAuth('token', user, new Date(Date.now() + 60_000).toISOString())
+    first.useAuthStore.getState().setWorkspace('space-1')
+    vi.resetModules()
+    const second = await import('./authStore')
+    expect(second.useAuthStore.getState().workspaceId).toBe('space-1')
+    second.useAuthStore.getState().logout()
+    expect(second.useAuthStore.getState().workspaceId).toBeNull()
+  })
+  it('clears a previous account selection when establishing a new login', async () => {
+    const { useAuthStore } = await import('./authStore')
+    const state = () => useAuthStore.getState()
+    state().setAuth('token-a', user, new Date(Date.now() + 60_000).toISOString())
+    state().setWorkspace('space-a')
+    state().setAuth('token-b', { ...user, id: 'user-2' }, new Date(Date.now() + 60_000).toISOString())
+    expect(state().workspaceId).toBeNull()
   })
 })

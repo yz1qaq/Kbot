@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AxiosError } from 'axios'
 
 const mocked = vi.hoisted(() => ({
-  state: { token: null as string | null, expiresAt: null as string | null },
+  state: { token: null as string | null, expiresAt: null as string | null, workspaceId: null as string | null },
   logout: vi.fn(),
 }))
 vi.mock('@/store/authStore', async () => {
@@ -13,6 +13,7 @@ import { api } from './client'
 
 beforeEach(() => {
   mocked.logout.mockReset()
+  mocked.state.workspaceId = null
   mocked.state.token = 'test-token'
   mocked.state.expiresAt = new Date(Date.now() + 60_000).toISOString()
 })
@@ -60,4 +61,16 @@ describe('authenticated requests', () => {
     } })).rejects.toBeInstanceOf(AxiosError)
     expect(mocked.logout).not.toHaveBeenCalled()
   })
+})
+
+it('attaches selected workspace to authenticated requests but not login', async () => {
+  mocked.state.workspaceId = 'space-a'
+  const headers: unknown[] = []
+  const adapter = async (config: import('axios').InternalAxiosRequestConfig) => {
+    headers.push(config.headers['X-Workspace-ID'])
+    return { data: [], status: 200, statusText: 'OK', headers: {}, config }
+  }
+  await api.get('/workspaces', { adapter })
+  await api.post('/auth/login', {}, { adapter })
+  expect(headers).toEqual(['space-a', undefined])
 })

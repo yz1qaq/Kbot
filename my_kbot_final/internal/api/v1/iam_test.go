@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"my_kbot_final/internal/domain"
+	"my_kbot_final/internal/platform/iam"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"my_kbot_final/internal/domain"
-	"my_kbot_final/internal/platform/iam"
 )
+
+// ---- iam_test.go ----
 
 type listUsersStoreStub struct {
 	iam.Store
@@ -89,5 +91,31 @@ func TestIAMListUsersStoreFailure(t *testing.T) {
 	NewIAMHandler(iam.NewService(store, nil)).ListUsers(response, httptest.NewRequest(http.MethodGet, "/api/v1/users", nil))
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d, want 500", response.Code)
+	}
+}
+
+// ---- iam_error_test.go ----
+
+func TestWriteIAMError(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"forbidden", iam.ErrForbidden, http.StatusForbidden},
+		{"wrapped forbidden", fmt.Errorf("member access: %w", iam.ErrForbidden), http.StatusForbidden},
+		{"last owner", iam.ErrLastOwner, http.StatusConflict},
+		{"wrapped last owner", fmt.Errorf("member write: %w", iam.ErrLastOwner), http.StatusConflict},
+		{"invalid workspace role", errors.New(`invalid workspace role "root"`), http.StatusBadRequest},
+		{"short error", errors.New("bad"), http.StatusInternalServerError},
+		{"store error", errors.New("list failed"), http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			writeIAMError(w, tc.err)
+			if w.Code != tc.status {
+				t.Fatalf("status=%d body=%s, want %d", w.Code, w.Body.String(), tc.status)
+			}
+		})
 	}
 }

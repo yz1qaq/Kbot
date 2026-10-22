@@ -14,3 +14,23 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+// Workspace 表示工作空间，例如一个团队或业务项目。
+type Workspace struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ParentID    *string   `json:"parent_id,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// WorkspaceMember 表示用户在某个工作空间中的成员身份。
+type WorkspaceMember struct {
+	WorkspaceID string    `json:"workspace_id"`
+	UserID      string    `json:"user_id"`
+	Email       string    `json:"email,omitempty"`
+	Name        string    `json:"name,omitempty"`
+	Role        string    `json:"role"` // owner / admin / editor / member / viewer
+	CreatedAt   time.Time `json:"created_at"`
+}

@@ -14,6 +14,8 @@ interface AuthState {
   token: string | null
   user: User | null
   expiresAt: string | null
+  workspaceId: string | null
+  setWorkspace: (id: string | null) => void
   setAuth: (token: string, user: User, expiresAt: string) => void
   logout: () => void
 }
@@ -29,8 +31,10 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       expiresAt: null,
-      setAuth: (token, user, expiresAt) => set({ token, user, expiresAt }),
-      logout: () => set({ token: null, user: null, expiresAt: null }),
+      workspaceId: null,
+      setWorkspace: (workspaceId) => set({ workspaceId }),
+      setAuth: (token, user, expiresAt) => set({ token, user, expiresAt, workspaceId: null }),
+      logout: () => set({ token: null, user: null, expiresAt: null, workspaceId: null }),
     }),
     { name: 'my-kbot-final-auth', storage: createJSONStorage(() => localStorage) },
   ),

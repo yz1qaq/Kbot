@@ -4,10 +4,10 @@
 
 ## 当前定位
 
-- 当前学习日：**第 4 天已完成；第 5 天尚未开始**。
-- 状态：登录、认证、管理员创建/列表 API 与 UsersPage 已贯通真实 Go/PostgreSQL，日验收通过。
-- 已完成目标：迁移与用户存储、IAM 业务/JWT/管理员引导，以及登录、管理员用户管理 Web 闭环。
-- 下一步：用户明确继续时开始第 5 天，先复核工作空间领域类型与固定 Final 查询，再布置最小后端单元。
+- 当前学习日：**第 5 天已完成**；第 1–5 天均已验收，第 6 天尚未开始。
+- 状态：空间和成员管理完整闭环已通过真实 HTTP/JWT/PostgreSQL/Web 验收；最后 owner 事务/并发保护、角色即时生效和每日回归通过。
+- 已完成目标：迁移、用户存储、IAM/JWT/引导、登录/管理员用户管理，以及工作空间/成员管理与 Web 闭环。
+- 下一步：用户要求继续后开始第 6 天缓冲与身份链路复习，优先重启持久化及登录→空间鉴权串联；本轮不追加任务。
 - 每日可投入时间：**已确认，每天 3–4 小时**。
 - 本日实际耗时：未记录，不从消息时间推测。
 
@@ -85,6 +85,47 @@
 
 2026-10-21，**第 4 天任务完成，可以收工。** 详见 [验收记录](day-04.md)。未调用模型 API，未提交或推送 Git。前端网络失败通过中止请求模拟，其余成功/权限响应来自真实服务。保留已有依赖告警/构建体积事项，不影响当前教学闭环；工作空间功能尚未实现。
 
+## 第 5 天记录
+
+- [x] 用户明确继续；复核第 4 天提交 e4d3758，以及当前领域类型、已有七表迁移、IAM SQL 和固定参考 Final。
+- [x] 新步骤前运行当前 go test ./internal/domain -count=1，通过；仅验收既有 User JSON 测试，不表示新类型已实现。
+- [x] 助手创建 DEV-003 工作空间任务单和 day-05 记录，明确真实数据库与 Web 验收目标。
+- [x] 学习者保存 Workspace/WorkspaceMember；助手运行 go test ./internal/domain -count=1，通过。
+- [x] 三条基础工作空间 SQL 与生成代码已保存；助手配置真实 PG 运行 TestWorkspaceQueries 的三项顶层测试，全部通过。
+- [x] 三个映射函数已移动到 iam/postgres_store.go，原测试文件 import 清理完成；助手实际运行两项映射测试全部通过。
+- [x] 三个基础工作空间 Store 方法和接口声明已保存，拼写已修正；四项真实 PG Store 测试全部通过。
+- [x] ListUserWorkspaces SQL/生成/Store/接口已保存；助手实际运行三项对应真实 PG 测试，全部通过。
+- [x] 两个成员读取 SQL/生成/Store/接口已保存，四项真实 PG 测试通过；测试改为检查 not found 语义，不约束资源标签空格。
+- [x] UpsertWorkspaceMember SQL/生成/Store/接口已保存；按用户确认移除 UserID 格式写回要求，四项真实 PG 测试全部通过。
+- [x] DeleteWorkspaceMember SQL/生成/具体 Store 已保存，四项真实 PG 删除测试全部通过。
+- [x] Store 接口中的 DeleteWorkspaceMember 声明已补齐。
+- [x] CreateWorkspaceWithOwner CTE SQL/sqlc 已保存，三项自动提交场景的真实 PG 测试全部通过。
+- [x] 对应 Go Store 与 workspaceOwnerStore 小接口已保存；按最新原文件重跑四项真实 PG Store 测试，全部通过。
+- [x] Service.CreateWorkspaceForUser 与 owner 常量已保存；四项测试全部通过，前三项受控 Store、第四项真实 PG。
+- [x] IsGlobalAdmin/ListAccessibleWorkspaces 已保存；四项顶层测试全部通过，含真实 PG 的角色、成员变更与空间过滤。
+- [x] CreateWorkspace 成功状态已修正为 201；TestWorkspaceRoutesPostgres 全部通过，随后真实 PG 的 go test ./internal/api/... -count=1 通过。
+- [x] WorkspacesPage、账号维度查询缓存、真实分页、创建、选择/取消选择已接入；刷新保留，登录/退出清选择，业务请求附带 X-Workspace-ID。
+- [x] 31 项前端测试、TypeScript 与生产构建通过；真实浏览器验证双账号空间隔离、管理员全量、两页 10/2 条、网络失败重试和 390/320px 布局；dist 预览亦连接真实 Go/PG 创建 201、列表 200、刷新与请求头。
+- [x] WorkspaceRole 的成员查询失败已改为 ErrForbidden；4 项角色/权限顶层测试全部通过，包含真实 PG。
+- [x] Service.ListWorkspaceMembers 已保存；3 项顶层测试全部通过，含真实 PG 的权限/空间范围与管理员成员可见性。
+- [x] 成员列表 Handler、writeIAMError 与认证路由已保存；真实 HTTP/PG 与错误映射测试通过。
+- [x] 查看成员入口与只读面板接入；36 项前端测试、类型/构建通过。真实 Go/PG 开发页及 dist 预览验证 200/403、跨空间范围、角色升降级即时生效、错误重试和 390/320px 布局。
+- [x] workspaceManagementAuthority 已保存；3 项顶层权限测试全部通过，含真实 PG 的角色变更、降级与停用。
+- [x] lockWorkspace 已保存；3 项真实 PG 顶层测试全部通过，覆盖两个独立连接的冲突、普通读取/不同空间、提交/回滚释放、缺失与取消。
+- [x] workspaceMemberRole/workspaceOwnerCount 已保存；3 项真实 PG 顶层测试全部通过，含事务内/外视图差异与取消。
+- [x] ErrLastOwner 与 UpsertWorkspaceMemberGuarded 已保存，Begin 失败已修正为 return err；2026-10-22 四项顶层真实 PG 测试全部通过，含请求取消与并发降级。
+- [x] DeleteWorkspaceMemberGuarded 已保存；2026-10-22 两组 guarded 写入八项顶层真实 PG 测试全部通过，包含并发删除及删除与降级混合。
+- [x] guardedMembershipStore、validWorkspaceRole、Service.UpsertWorkspaceMember 与参考 fallback 已保存；2026-10-22 四项顶层业务测试全部通过（前三项受控 Store，第四项真实 PG）。
+- [x] Service.DeleteWorkspaceMember 已保存；2026-10-22 四项顶层业务测试全部通过（前三项受控 Store，第四项真实 PG）。
+- [x] 成员新增/修改/移除业务及 PostgreSQL guarded Store 保护已实现并分别验收；每日整体回归待完成。
+- [x] PUT 成员 Handler/路由与 409/400 错误映射已保存；2026-10-22 TestUpsertWorkspaceMemberRoutePostgres（真实 HTTP/JWT/PG）和 TestWriteIAMError（七个子场景）全部通过。
+- [x] 用户要求先合并测试；2026-10-22 文件 61→28（Go 54→23，前端 7→5，IAM 24→9），全部测试/声明保留，合并前后 Go 365 项（含子测试）及前端 36 项结果一致，竞态/静态/类型检查通过；详见 test-layout.md。本次不是第 5 天整体功能验收。
+- [x] DELETE Handler/认证路由已保存；2026-10-22 TestDeleteWorkspaceMemberRoutePostgres 真实 HTTP/JWT/PG 通过，成功 204 空响应、401/403/409、账号及跨空间关系保留。
+- [x] 成员 GET/PUT/DELETE 与 Web 添加/角色修改/移除已完成真实 Go/PostgreSQL 开发页及 dist 预览联调；42 项前端测试、类型/构建通过，含权限变化、409、网络失败重试、双击防重与 390/320px。
+- [x] 两账号两空间、持久化/原子性/权限拒绝、最后 owner 并发保护及每日回归通过；140 项顶层 Go 测试连同子测试共 366 项通过，无实际测试跳过，go vet 通过。README 来源/实际依赖图已更新，临时 schema/数据库残留 0，迁移 1/dirty=false。
+
+2026-10-22，**第 5 天任务完成，可以收工。** 空间与成员管理已贯通 Web → Auth → HTTP → Service → PostgreSQL。选择只是客户端上下文，不代表授权；正常 PostgreSQL 写入走 guarded 事务。完整验收及实际范围见 [第 5 天记录](day-05.md)。临时服务/schema 已清理，未提交或推送 Git，未调用模型 API。第 6 天缓冲与身份链路复习尚未开始，等待用户要求继续。
+
 ## 后续学习日状态
 
 | 学习日 | 状态 | 实际验收记录 |
@@ -93,7 +134,7 @@
 | 2 | 已完成 | 五条 sqlc 查询、用户 Store、真实 PG 读写与新池重连、全模块检查通过 |
 | 3 | 已完成 | IAM 业务、真实启动引导、静态/竞态检查通过，测试资源清理完成 |
 | 4 | 已完成 | 登录与管理员用户管理真实 Go/PG/Web 闭环，日验收通过 |
-| 5 | 未开始 | 工作空间接口与联调 |
+| 5 | 已完成 | 空间/成员 API 与 Web、权限变化、最后 owner 并发保护、完整竞态回归通过，临时资源已清理 |
 | 6 | 未开始 | 身份模块缓冲与复习 |
 | 7–12 | 未开始 | 模型、配置快照、聊天与工具 |
 | 13 | 未开始 | Agent 工具链缓冲与复习 |

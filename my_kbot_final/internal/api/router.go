@@ -80,11 +80,23 @@ func (h *Handler) Routes() http.Handler {
 					"/users",
 					iamHandler.ListUsers,
 				)
+				protected.Get("/workspaces", iamHandler.ListWorkspaces)
+				protected.Post("/workspaces", iamHandler.CreateWorkspace)
+				protected.Get(
+					"/workspaces/{workspace_id}/members",
+					iamHandler.ListWorkspaceMembers,
+				)
+				protected.Put(
+					"/workspaces/{workspace_id}/members/{user_id}",
+					iamHandler.UpsertWorkspaceMember,
+				)
+				protected.Delete(
+					"/workspaces/{workspace_id}/members/{user_id}",
+					iamHandler.DeleteWorkspaceMember,
+				)
 
 			})
-
 		})
-
 	}
 	return r
 }
