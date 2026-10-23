@@ -10,6 +10,7 @@ func clearConfigEnvironment(t *testing.T) {
 	for _, key := range []string{
 		"KBOT_ADDR", "KBOT_DATABASE_URL", "KBOT_JWT_SECRET_KEY",
 		"KBOT_AUTOSEED_ADMIN", "KBOT_AUTOSEED_ADMIN_EMAIL", "KBOT_AUTOSEED_ADMIN_PASSWORD",
+		"KBOT_LLM_BASE_URL", "KBOT_LLM_API_KEY", "KBOT_LLM_MODEL",
 	} {
 		t.Setenv(key, "")
 	}
@@ -21,6 +22,9 @@ func TestLoad(t *testing.T) {
 		cfg := Load()
 		if cfg.Addr != ":18090" || cfg.DatabaseURL != "postgres://kbot:kbot@localhost:15432/kbot?sslmode=disable" {
 			t.Fatal("unexpected server or database defaults")
+		}
+		if cfg.LLMBaseURL != "https://api.deepseek.com/v1" || cfg.LLMModel != "deepseek-v4-pro" || cfg.LLMAPIKey != "" {
+			t.Fatal("model defaults must match the fixed reference and have no default credential")
 		}
 		if cfg.JWTSecretKey != "" || cfg.AutoseedAdmin || cfg.AutoseedAdminEmail != "admin@example.com" || cfg.AutoseedAdminPassword != "admin12345" {
 			t.Fatal("JWT must have no default secret; admin bootstrap should be disabled with reference account defaults")
@@ -34,6 +38,9 @@ func TestLoad(t *testing.T) {
 		t.Setenv("KBOT_AUTOSEED_ADMIN", "true")
 		t.Setenv("KBOT_AUTOSEED_ADMIN_EMAIL", "test-admin@example.com")
 		t.Setenv("KBOT_AUTOSEED_ADMIN_PASSWORD", "test-admin-password")
+		t.Setenv("KBOT_LLM_BASE_URL", "http://127.0.0.1:19999/v1")
+		t.Setenv("KBOT_LLM_API_KEY", "test-only-model-key")
+		t.Setenv("KBOT_LLM_MODEL", "test-model")
 		cfg := Load()
 		if cfg.Addr != ":19090" || cfg.DatabaseURL != "postgres://tester:testpass@localhost:25432/kbot_test?sslmode=disable" {
 			t.Fatal("server/database environment values were not loaded")
@@ -41,8 +48,22 @@ func TestLoad(t *testing.T) {
 		if cfg.JWTSecretKey != strings.Repeat("k", 32) || !cfg.AutoseedAdmin || cfg.AutoseedAdminEmail != "test-admin@example.com" || cfg.AutoseedAdminPassword != "test-admin-password" {
 			t.Fatal("authentication environment values were not loaded")
 		}
+		if cfg.LLMBaseURL != "http://127.0.0.1:19999/v1" || cfg.LLMAPIKey != "test-only-model-key" || cfg.LLMModel != "test-model" {
+			t.Fatal("model environment values were not loaded")
+		}
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("explicit configuration should validate: %v", err)
+		}
+	})
+	t.Run("IAM remains valid without model credentials", func(t *testing.T) {
+		clearConfigEnvironment(t)
+		t.Setenv("KBOT_JWT_SECRET_KEY", strings.Repeat("j", 32))
+		cfg := Load()
+		if cfg.LLMAPIKey != "" {
+			t.Fatal("model credential should remain absent")
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("IAM configuration must remain valid without a model credential: %v", err)
 		}
 	})
 	t.Run("bootstrap requires exact true", func(t *testing.T) {

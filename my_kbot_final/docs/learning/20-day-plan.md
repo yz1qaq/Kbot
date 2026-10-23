@@ -10,7 +10,7 @@
 
 当前 DEV-002 已完成 User 类型、JSON 隐藏密码哈希、GenerateID，以及首份 IAM 迁移中的 users、workspaces、workspace_members、roles 四张表。这四张表的真实 PostgreSQL 隔离事务测试在制定计划时已通过。迁移文件尚不完整，没有正式安装，用户存储、登录和聊天尚未接入。
 
-**第 1–5 天已完成，第 6 天尚未开始。** [每日实际进度](progress.md) 是续课时的状态依据，下面列的是计划，不能当作完成记录。
+**第 1–7 天已完成，第 8 天尚未开始。** [每日实际进度](progress.md) 是续课时的状态依据，下面列的是计划，不能当作完成记录。
 
 ## 时间与范围
 
@@ -43,7 +43,7 @@
 | 3 | IAM 创建用户、bcrypt、登录、JWT 与首个管理员引导；`internal/platform/iam/`、`internal/config/` | 密码、Token、幂等引导测试 | 密码不以明文存储；正确密码成功，错误密码/非活跃账号失败；Token 验证与失效路径通过 |
 | 4 | 登录、管理员创建用户 API 与认证中间件；`internal/api/v1/`、`middleware/` | 最小 LoginPage、UsersPage 和登录态请求适配 | 浏览器能登录；管理员能创建用户；普通用户不能创建；缺失/错误 Token 被拒绝；JWT 密钥统一来自服务配置 |
 | 5 | 工作空间 Store/Service、成员与角色、空间访问边界 | WorkspacesPage、空间选择、必要成员操作 | 两账号两空间验证可访问/不可访问；持久化成员关系；全局角色与空间角色作用域清楚 |
-| 6 | 缓冲与复习①：修复第 1–5 天问题、整理身份链路 | 登录/空间回归脚本、README 架构图 | 从新测试账号到空间鉴权一条链验证通过；重启后数据保留；阶段提交就绪；无遗留则做重建和隔离练习 |
+| 6 | 缓冲与复习①：修复第 1–5 天问题、整理身份链路 | 复用已有 Web/HTTP 验收、README 架构图（按用户要求不另加 IAM 脚本） | 从新测试账号到空间鉴权一条链验证通过；重启后数据保留；阶段提交就绪；无遗留则做重建和隔离练习 |
 | 7 | 单一模型的 Eino Gateway 与 Generate/Stream、配置和超时；`internal/runtime/llm/` | 模拟模型 HTTP 测试、配置说明 | 模拟服务的同步、流式、错误、取消通过；不把模拟调用说成真实模型调用；完整模型管理控制面后续扩展 |
 | 8 | Prompt 与 Agent 最小配置、发布版本和快照绑定；`platform/prompt/`、`platform/agent/` | PromptsPage、AgentsPage 的本轮字段 | 可以创建、发布、查询；快照绑定具体版本；后续修改配置不改变已发布版本，不在当天实现灰度实验 |
 | 9 | Conversation/Message 持久化与 Engine 基本运行；`internal/runtime/engine/`、对应 Store | 会话列表和基本聊天区域 | 会话固定快照，历史消息按顺序回读；跨空间会话不可访问；服务重启后记录保留，受控模型下能完成一轮 |

@@ -16,12 +16,17 @@
 
 **第 4 天登录与管理员用户管理已完成。** 登录、会话恢复/退出、Auth/RequireGlobalAdmin、创建用户和分页列表已接入；UsersPage 可以查询、翻页、刷新及新建普通用户。真实 Go/PostgreSQL 与浏览器验收通过，普通用户及篡改前端角色均不能绕过服务端权限。Agent 聊天尚未接入，父目录课程版能力不代表 Final 已完成。
 
-**第 5 天工作空间与成员管理已完成。** 空间列表/创建/选择及成员查询、添加、改角色、移除已贯通真实 PostgreSQL 与 Web。空间 admin 管理非 owner；owner 和全局管理员可操作 owner，但必须保留至少一位。PostgresStore 在同一事务内锁空间行并检查/写入，验证并发删除及删除与降级混合。管理员用户页提供可复制 ID，成员表单显示目标空间、操作结果与权限错误。完整竞态、静态、前端测试/构建及浏览器验收通过；第 6 天尚未开始。
+**第 5 天工作空间与成员管理已完成。** 空间列表/创建/选择及成员查询、添加、改角色、移除已贯通真实 PostgreSQL 与 Web。空间 admin 管理非 owner；owner 和全局管理员可操作 owner，但必须保留至少一位。PostgresStore 在同一事务内锁空间行并检查/写入，验证并发删除及删除与降级混合。管理员用户页提供可复制 ID，成员表单显示目标空间、操作结果与权限错误。完整竞态、静态、前端测试/构建及浏览器验收通过。
 
-- [20 天学习计划](docs/learning/20-day-plan.md) / [每日实际进度](docs/learning/progress.md)（第 1–5 天已完成）
+**第 6 天复习与阶段验收已完成。** 复盘启动装配及身份/空间授权链路；本日补充真实服务进程重启和独立空库迁移检查，开发库仍为 1/dirty=false，临时资源已清理。按学习者要求复用已有 Web 验收，不保留额外 IAM 脚本，不要求重复操作。
+
+**第 7 天单一模型 Gateway 已完成。** 新增模型配置、Eino 客户端构造、同步 Generate 与真增量 Stream；错误、取消、30 秒客户端时限和更短业务 deadline 已通过本地受控 HTTP/SSE 测试。完整 Go 竞态与静态检查通过；当前 Gateway 是独立调用层，尚未接入 server 或聊天 API/Web。
+
+- [20 天学习计划](docs/learning/20-day-plan.md) / [每日实际进度](docs/learning/progress.md)（第 1–7 天已完成）
 - [第 4 天登录与用户管理验收](docs/learning/day-04.md)
 - [第 1 天迁移验收](docs/learning/day-01.md) / [第 2 天用户存储验收](docs/learning/day-02.md) / [第 3 天 IAM 业务验收](docs/learning/day-03.md)
 - [基础阶段验收记录](docs/development/DEV-001.md) / [已完成的登录任务](docs/development/DEV-002.md) / [当前工作空间任务](docs/development/DEV-003.md)
+- [第 7 天模型调用验收](docs/learning/day-07.md) / [模型调用任务 DEV-004](docs/development/DEV-004.md)
 - [产品范围](PRODUCT.md) / [界面设计约定](DESIGN.md)
 
 ## 目录
@@ -37,6 +42,7 @@ sqlc.yaml                          SQL 到 Go 的生成配置
 internal/infrastructure/postgres/   连接池、queries SQL、sqlc 生成代码
 internal/platform/iam/              用户与空间业务 Service、JWT、管理员引导及 PostgreSQL Store
 internal/api/                       Chi 路由与健康检查
+internal/runtime/llm/               单一模型 Gateway、同步/流式调用与模型行为测试
 deploy/docker-compose.yml          本地独立 PostgreSQL
 web/admin/                         React 管理端，系统状态、登录、用户管理、空间列表/创建/选择/成员管理
 docs/development/                  功能任务与验收记录
@@ -140,6 +146,14 @@ flowchart TD
     AuthState -->|业务请求 Bearer token / X-Workspace-ID| Client
     Client --> Proxy[Vite 同源代理 :15173]
     Proxy -->|转发到 :18090| Server
+    subgraph LLMModule[已实现的模型调用层 - 尚未接入 server]
+        LLMGateway[llm.Gateway: Generate / Stream] --> CloudProvider[cloud provider / ToolCallingChatModel]
+        CloudProvider --> EinoAdapter[Eino openai.ChatModel]
+        EinoAdapter --> ModelHTTP[http.Client: 30 秒总时限]
+        ModelHTTP --> ModelEndpoint[配置的模型端点 / 验收仅连接本地模拟服务]
+    end
+    Config -->|NewGateway 参数| LLMGateway
+    LLMTests[gateway_test.go: 本地 HTTP / SSE] --> LLMGateway
 ```
 
 迁移命令是独立入口，负责表结构和版本；server 不会在启动时自动运行迁移。启动入口现在会装配 pool → pgstore.New(pool) → NewPostgresStore → NewService，并按配置执行 EnsureSeedAdmin。引导发生在 HTTP 启动前；失败会记录日志并继续启动，需检查管理员就绪日志。
@@ -246,6 +260,26 @@ go test ./internal/infrastructure/postgres/sqlc
 
 服务运行时停止本项目数据库，再在页面点击“重新检查”：后端服务仍为 200，PostgreSQL 为 503，整体显示“依赖尚未就绪”。随后执行 `docker compose -f deploy/docker-compose.yml up -d --wait db`，再次检查应恢复“服务已就绪”。本阶段已实际完成上述停止、恢复验证。
 
+## 启动装配与表结构边界
+
+`cmd/server/main.go` 中先加载并校验配置，打开一个连接池，再构造 `pgstore.Queries`、`iam.PostgresStore`、`iam.Service`，将同一个 Service 传入 `api.Handler`，由 `Routes()` 注册路由和认证中间件，最终交给 `http.Server`。Queries 和 Store 使用同一连接池；Store 额外保留 pool 用于开启事务，事务内用 `Queries.WithTx(tx)` 执行查询。
+
+这些构造函数保存依赖，不负责建表。`cmd/migrate` 执行迁移 SQL 管理表结构，sqlc 根据 SQL/表结构生成 Go 代码，server 在已有表上执行业务读写。配置允许时，server 在监听前调用 `EnsureSeedAdmin` 初始化管理员数据。
+
+## 模型调用基础
+
+`internal/runtime/llm.Gateway` 统一持有 Eino 模型客户端。`Generate` 等待完整 `schema.Message`，`Stream` 返回逐段读取的 `schema.StreamReader`；调用方负责读取、关闭及提前退出时取消 context。收到第一段不代表流已完成，后续读取仍可能报错。
+
+模型配置来自 `KBOT_LLM_BASE_URL`、`KBOT_LLM_API_KEY`、`KBOT_LLM_MODEL`；模型密钥只由服务端读取，没有默认密钥。JWT 密钥用于用户登录身份，和模型服务凭据用途不同。未配置模型密钥仍可使用已有 IAM，模型调用方法会拒绝未配置状态。模型客户端默认 30 秒总时限，包含流式响应体读取；更短的调用方 deadline 优先触发。
+
+本轮是固定 Final 的分阶段单模型实现；完整 Profile/路由/配额/计量后续补齐。当前 server 和聊天路由尚未使用 Gateway；没有新增聊天页面或模型管理控制面。测试使用真实 Eino 适配器连接本地 HTTP/SSE 模拟服务，不代表真实模型密钥有效性、模型可用性或回答质量已验证。
+
+## 身份与空间验收
+
+第 6 天已完成。第 5 天已完成真实 Go/PostgreSQL 与 Web 的登录、空间和成员管理联调；第 6 天补充了真实 Go 进程退出并重启后的数据、成员权限和旧 token 验证，隔离环境检查通过并已清理。详见 [第 6 天记录](docs/learning/day-06.md)。
+
+按学习者要求，本轮不保留额外 IAM 联调脚本，也不要求重复运行已有 Web 验收场景。
+
 ## 测试组织
 
 2026-10-22 已将零散测试按功能归组：61 个文件合并为 28 个（Go 23、前端 5），IAM 包由 24 个合并为 9 个。保留全部测试、断言和辅助代码；合并前后的 139 项 Go 顶层测试及子测试共 365 项、前端 36 项的名称和通过结果一致。完整竞态回归（含真实 PostgreSQL）、Go 静态检查和前端类型检查通过。详见 [测试文件索引与验证说明](docs/learning/test-layout.md)。后续在对应功能文件补场景，不再按每个教学小步骤单独建文件。
@@ -291,3 +325,5 @@ npm run build
 第 5 天最终验收（2026-10-22）：Go 完整竞态回归含真实 PostgreSQL，140 项顶层测试及子测试共 366 项全部通过，无实际用例跳过；go vet 通过。前端仍为 5 个测试文件，42 项通过，TypeScript/生产构建通过。开发页与 dist 预览真实验证成员增删改、空间 admin/owner/global admin、角色即时生效、409 保留、网络失败重试、重复提交和选中空间请求头。自行移除后取消空间选择但保留账号登录。390/320px 布局与截图已检查。临时服务/schema/测试数据库已清理，开发库 1/dirty=false；未调用模型 API、未提交 Git。保留既有单包体积提示，未重跑 npm audit。详见 [第 5 天验收记录](docs/learning/day-05.md)。
 
 本轮页面试用：按上文启动后端和前端，管理员在“用户管理”创建账号并复制用户 ID；进入“工作空间 → 查看成员 → 添加成员”，输入已有账号 ID 并选择空间角色。成员行可修改角色或移除；工作空间至少保留一位所有者。已有后端进程需要重启才能加载新路由。
+
+第 7 天最终验收（2026-10-23）：go vet ./... 与带真实 PostgreSQL 的全模块竞态测试通过 144 项顶层、含子测试 389 项，无实际用例跳过。模型模块含真实首段提前到达、读取错误/取消、实际 30.003 秒客户端超时和 1 秒调用方 deadline 验证。测试临时库/schema 清零，开发库仍 1/dirty=false。前端未改，本日未重复其历史检查；模型只连接本地受控模拟服务，无付费调用。详见 [第 7 天记录](docs/learning/day-07.md)。

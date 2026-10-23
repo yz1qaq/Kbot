@@ -23,6 +23,16 @@ type Config struct {
 
 	AutoseedAdminEmail    string
 	AutoseedAdminPassword string
+
+	//大模型
+	// LLMBaseURL 是模型服务的 OpenAI 兼容接口地址。
+	LLMBaseURL string
+
+	// LLMAPIKey 是服务端调用模型服务时使用的密钥。
+	LLMAPIKey string
+
+	// LLMModel 是请求中指定的模型名称。
+	LLMModel string
 }
 
 // Load 从环境变量读取配置。
@@ -38,6 +48,13 @@ func Load() Config {
 		AutoseedAdmin:         getenv("KBOT_AUTOSEED_ADMIN", "false") == "true",
 		AutoseedAdminEmail:    getenv("KBOT_AUTOSEED_ADMIN_EMAIL", "admin@example.com"),
 		AutoseedAdminPassword: getenv("KBOT_AUTOSEED_ADMIN_PASSWORD", "admin12345"),
+
+		LLMBaseURL: getenv(
+			"KBOT_LLM_BASE_URL",
+			"https://api.deepseek.com/v1",
+		),
+		LLMAPIKey: os.Getenv("KBOT_LLM_API_KEY"),
+		LLMModel:  getenv("KBOT_LLM_MODEL", "deepseek-v4-pro"),
 	}
 }
 

@@ -460,7 +460,7 @@ func (s *Service) upsertWorkspaceMemberFallback(ctx context.Context, member *dom
 }
 
 // DeleteWorkspaceMember 移除成员，但必须保留至少一位 owner。
-func (s *Service) DeleteWorkspaceMember(ctx context.Context,actorID, workspaceID, userID string,) error {
+func (s *Service) DeleteWorkspaceMember(ctx context.Context, actorID, workspaceID, userID string) error {
 	manageOwners, err := s.workspaceManagementAuthority(
 		ctx, actorID, workspaceID,
 	)
